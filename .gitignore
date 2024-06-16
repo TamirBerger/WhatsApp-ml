@@ -1,0 +1,5 @@
+catboost_info/
+*.png
+data collection_intermediates/
+__pycache__/
+data_collection/
