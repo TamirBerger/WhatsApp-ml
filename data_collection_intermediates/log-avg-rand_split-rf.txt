@@ -1,0 +1,108 @@
+random forest
+2024-06-11 11:33:25.422944	Experiment : fps_bandwidth-loss-falls_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 3.02 || R2_avg = -0.11 || Accuracy_avg = 70.86
+2024-06-11 11:45:56.245524	Experiment : fps_bandwidth-loss-falls_ip-udp-ml_loss_cv_idxavg || MAE_avg = 2.85 || R2_avg = 0.19 || Accuracy_avg = 66.1
+2024-06-11 11:57:18.698902	Experiment : fps_bandwidth-loss-falls_ip-udp-ml_falls_cv_idxavg || MAE_avg = 1.68 || R2_avg = 0.51 || Accuracy_avg = 85.48
+2024-06-11 12:13:01.002444	Experiment : brisque_bandwidth-loss-falls_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 5.16 || R2_avg = 0.58 || Accuracy_avg = 67.93
+2024-06-11 12:29:08.987557	Experiment : brisque_bandwidth-loss-falls_ip-udp-ml_loss_cv_idxavg || MAE_avg = 2.61 || R2_avg = -0.31 || Accuracy_avg = 88.12
+2024-06-11 12:43:46.667664	Experiment : brisque_bandwidth-loss-falls_ip-udp-ml_falls_cv_idxavg || MAE_avg = 4.02 || R2_avg = 0.84 || Accuracy_avg = 74.77
+
+XGBoost
+2024-06-11 13:09:56.113018	Experiment : fps_bandwidth-loss-falls_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 3.01 || R2_avg = -0.08 || Accuracy_avg = 69.92
+2024-06-11 13:21:24.737045	Experiment : fps_bandwidth-loss-falls_ip-udp-ml_loss_cv_idxavg || MAE_avg = 2.87 || R2_avg = 0.21 || Accuracy_avg = 64.78
+2024-06-11 13:31:41.647562	Experiment : fps_bandwidth-loss-falls_ip-udp-ml_falls_cv_idxavg || MAE_avg = 1.74 || R2_avg = 0.5 || Accuracy_avg = 84.18
+2024-06-11 13:42:17.877744	Experiment : brisque_bandwidth-loss-falls_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 5.37 || R2_avg = 0.57 || Accuracy_avg = 65.93
+2024-06-11 13:53:09.426810	Experiment : brisque_bandwidth-loss-falls_ip-udp-ml_loss_cv_idxavg || MAE_avg = 2.83 || R2_avg = -0.42 || Accuracy_avg = 85.29
+2024-06-11 14:02:55.155992	Experiment : brisque_bandwidth-loss-falls_ip-udp-ml_falls_cv_idxavg || MAE_avg = 4.14 || R2_avg = 0.82 || Accuracy_avg = 75.44
+
+catboost
+2024-06-11 16:38:05.220433	Experiment : fps_bandwidth-loss-falls_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 3.02 || R2_avg = -0.1 || Accuracy_avg = 70.42
+2024-06-11 17:28:21.507153	Experiment : fps_bandwidth-loss-falls_ip-udp-ml_loss_cv_idxavg || MAE_avg = 2.81 || R2_avg = 0.21 || Accuracy_avg = 66.18
+2024-06-11 18:15:52.912644	Experiment : fps_bandwidth-loss-falls_ip-udp-ml_falls_cv_idxavg || MAE_avg = 1.65 || R2_avg = 0.53 || Accuracy_avg = 85.48
+2024-06-11 18:53:36.797688	Experiment : brisque_bandwidth-loss-falls_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 5.28 || R2_avg = 0.58 || Accuracy_avg = 66.45
+2024-06-11 19:31:46.257325	Experiment : brisque_bandwidth-loss-falls_ip-udp-ml_loss_cv_idxavg || MAE_avg = 2.63 || R2_avg = -0.27 || Accuracy_avg = 87.76
+2024-06-11 20:06:13.411220	Experiment : brisque_bandwidth-loss-falls_ip-udp-ml_falls_cv_idxavg || MAE_avg = 3.94 || R2_avg = 0.84 || Accuracy_avg = 75.81
+
+=======================================================================================================
+=======================================================================================================
+=======================================================================================================
+
+new data set - bandwidth
+random forest - 5 fold
+
+2024-06-18 10:53:58.821598	Experiment : fps_bandwidth_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 2.89 || R2_avg = 0.01 || Accuracy_avg = 52.97
+2024-06-18 11:08:12.878126	Experiment : brisque_bandwidth_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 13.09 || R2_avg = 0.08 || Accuracy_avg = 15.99
+
+=======================================================================================================
+
+new data set - bandwidth
+random forest - 10 fold
+
+
+2024-06-18 11:44:27.892757	Experiment : fps_bandwidth_ip-udp-ml_bandwidth_cv_idx1avg || MAE_avg = 2.87 || R2_avg = -0.02 || Accuracy_avg = 54.45
+2024-06-18 12:13:32.527785	Experiment : brisque_bandwidth_ip-udp-ml_bandwidth_cv_idx1avg || MAE_avg = 12.94 || R2_avg = 0.11 || Accuracy_avg = 15.17
+
+=======================================================================================================
+
+new data set - bandwidth
+random forest - 10 fold
+train - banswidth, falls
+test - falls
+
+2024-06-18 13:08:40.726186	Experiment : fps_bandwidth-falls_ip-udp-ml_falls_cv_idx1avg || MAE_avg = 1.71 || R2_avg = 0.49 || Accuracy_avg = 84.72
+2024-06-18 13:41:31.802644	Experiment : brisque_bandwidth-falls_ip-udp-ml_falls_cv_idx1avg || MAE_avg = 3.84 || R2_avg = 0.85 || Accuracy_avg = 79.19
+
+=======================================================================================================
+
+2024-06-18 15:05:30.526167	Experiment : fps_bandwidth-falls_ip-udp-ml_bandwidth_cv_idx1avg || MAE_avg = 2.89 || R2_avg = -0.05 || Accuracy_avg = 53.84
+2024-06-18 15:50:33.157582	Experiment : brisque_bandwidth-falls_ip-udp-ml_bandwidth_cv_idx1avg || MAE_avg = 12.94 || R2_avg = 0.12 || Accuracy_avg = 14.56
+
+=======================================================================================================
+
+random forest - 10 fold
+train - [bandwidth, falls, bandwidth_old]
+test - [bandwidth], [bandwidth_old]
+
+2024-06-18 16:50:26.535929	Experiment : fps_bandwidth-falls-bandwidth_old_ip-udp-ml_bandwidth_cv_idx1avg || MAE_avg = 2.86 || R2_avg = -0.01 || Accuracy_avg = 54.23
+2024-06-18 17:25:54.544721	Experiment : fps_bandwidth-falls-bandwidth_old_ip-udp-ml_bandwidth_old_cv_idx1avg || MAE_avg = 2.99 || R2_avg = -0.11 || Accuracy_avg = 70.98
+2024-06-18 18:15:23.415608	Experiment : brisque_bandwidth-falls-bandwidth_old_ip-udp-ml_bandwidth_cv_idx1avg || MAE_avg = 12.91 || R2_avg = 0.12 || Accuracy_avg = 15.21
+
+=======================================================================================================
+
+pca
+random forest - 10 fold
+train - [bandwidth]
+test - [bandwidth]
+
+
+2024-06-18 19:49:05.366254	Experiment : fps_bandwidth_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 4.19 || R2_avg = -0.96 || Accuracy_avg = 39.61
+2024-06-18 20:01:45.239411	Experiment : brisque_bandwidth_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 15.81 || R2_avg = -0.47 || Accuracy_avg = 21.09
+=======================================================================================================
+
+pca 4 components
+
+2024-06-18 20:23:19.303522	Experiment : fps_bandwidth_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 3.47 || R2_avg = -0.43 || Accuracy_avg = 45.87
+
+pca 8 components
+
+2024-06-18 20:40:43.825329	Experiment : fps_bandwidth_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 3.22 || R2_avg = -0.25 || Accuracy_avg = 48.26
+2024-06-18 20:54:42.452968	Experiment : brisque_bandwidth_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 14.71 || R2_avg = -0.07 || Accuracy_avg = 8.29
+
+pca 12 components
+
+2024-06-18 23:42:20.024020	Experiment : fps_bandwidth_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 3.21 || R2_avg = -0.28 || Accuracy_avg = 49.0
+2024-06-18 23:58:15.631008	Experiment : brisque_bandwidth_ip-udp-ml_bandwidth_cv_idxavg || MAE_avg = 14.56 || R2_avg = -0.05 || Accuracy_avg = 9.26
+
+=======================================================================================================
+
+net_conditions_train = [["bandwidth", "bandwidth_old", "loss", "falls"]]
+net_conditions_test = [["bandwidth"], ["bandwidth_old"], ["loss"], ["falls"]]
+fold 10
+
+2024-06-19 02:01:42.845457	Experiment : fps_bandwidth-bandwidth_old-loss-falls_ip-udp-ml_bandwidth_cv_idx1avg || MAE_avg = 2.87 || R2_avg = -0.03 || Accuracy_avg = 54.07
+2024-06-19 02:47:50.699680	Experiment : fps_bandwidth-bandwidth_old-loss-falls_ip-udp-ml_bandwidth_old_cv_idx1avg || MAE_avg = 2.94 || R2_avg = -0.06 || Accuracy_avg = 71.11
+2024-06-19 03:34:13.750488	Experiment : fps_bandwidth-bandwidth_old-loss-falls_ip-udp-ml_loss_cv_idx1avg || MAE_avg = 2.94 || R2_avg = 0.13 || Accuracy_avg = 65.7
+2024-06-19 04:19:31.470373	Experiment : fps_bandwidth-bandwidth_old-loss-falls_ip-udp-ml_falls_cv_idx1avg || MAE_avg = 1.68 || R2_avg = 0.51 || Accuracy_avg = 85.6
+2024-06-19 05:19:55.473309	Experiment : brisque_bandwidth-bandwidth_old-loss-falls_ip-udp-ml_bandwidth_cv_idx1avg || MAE_avg = 12.97 || R2_avg = 0.11 || Accuracy_avg = 14.33
+2024-06-19 06:19:51.746235	Experiment : brisque_bandwidth-bandwidth_old-loss-falls_ip-udp-ml_bandwidth_old_cv_idx1avg || MAE_avg = 5.74 || R2_avg = 0.51 || Accuracy_avg = 64.71
+2024-06-19 07:19:19.897378	Experiment : brisque_bandwidth-bandwidth_old-loss-falls_ip-udp-ml_loss_cv_idx1avg || MAE_avg = 2.87 || R2_avg = -0.53 || Accuracy_avg = 85.33
+2024-06-19 08:17:40.798507	Experiment : brisque_bandwidth-bandwidth_old-loss-falls_ip-udp-ml_falls_cv_idx1avg || MAE_avg = 4.01 || R2_avg = 0.84 || Accuracy_avg = 75.02

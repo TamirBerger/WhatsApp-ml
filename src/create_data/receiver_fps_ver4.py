@@ -12,7 +12,7 @@ class FPScalculator:
         self.unique_frames_per_second = []
         # Define the region where the number is displayed (replace these coordinates with your own)
         #self.x, self.y, self.width, self.height = 920, 65, 80, 65  # fps validation coordinates
-        self.x, self.y, self.width, self.height = 1240, 185, 120, 90
+        self.x, self.y, self.width, self.height = 1175, 405, 80, 70
         self.start_time = None  # update at beginning of 'run' method
         self.grabs = []
         #self.fps_list = np.zeros(duration+1).tolist()
@@ -159,7 +159,7 @@ def main():
     write_to_csv(fpsCalculator.fps_list, fpsCalculator.screenshots_list, dir_path)
     write_to_csv_screenshots(fpsCalculator.screenshots_list, dir_path)
     print(f'\ntotal duration of receiver fps program: {time.time() - prog_start_time}')
-    fpsCalculator.display_unique_frames_captured()
+    #fpsCalculator.display_unique_frames_captured()
 
 
 if __name__ == "__main__":

@@ -8,7 +8,6 @@ import time
 import csv
 import shutil
 
-
 framerate = 1
 
 

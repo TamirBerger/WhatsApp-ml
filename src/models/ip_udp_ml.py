@@ -122,7 +122,7 @@ class IP_UDP_ML:
         #X.to_csv(f'outputTrain.csv', index=False)
         print(X.shape)
         y = X[self.metric]
-        X = X[X.columns.difference([self.metric, 'et', 'ts', 'file', 't_et'])]
+        X = X[X.columns.difference([self.metric, 'et', 'ts', 'file', 't_et', 'screenshots_num'])]
         self.feature_matrix = X.copy()
         self.target_vals = y.copy()
         if self.metric == 'fps' or self.metric == 'brisque':

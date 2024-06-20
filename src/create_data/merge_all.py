@@ -11,11 +11,11 @@ def run_file(args):
 
 
 if __name__ == '__main__':
-    time.sleep(0)  # 5 seconds to open full screen video window
+    #time.sleep(0)  # 5 seconds to open full screen video window
     initial_time = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M")
     BW = "250"
     directory = f"C:\\final_project\pcap_files\\{initial_time}_{BW}KBps"
-    duration = "10"
+    duration = "242"
     if not os.path.exists(directory):
         os.makedirs(directory)
 

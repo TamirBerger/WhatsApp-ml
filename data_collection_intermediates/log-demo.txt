@@ -1,0 +1,1 @@
+2024-06-20 13:23:43.139731	Experiment : brisque_rtp-ml_RandomForestRegressor_LSTATS-TSTATS_cv_1 || MAE_avg = 4.26 || R2_avg = 0.83 || Accuracy_avg = 79.15

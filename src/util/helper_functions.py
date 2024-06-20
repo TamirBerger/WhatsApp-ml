@@ -14,23 +14,24 @@ sys.path.append(d)
 
 class KfoldCVOverFiles:
 
-    def __init__(self, k, main_folder, net_conditions, metrics, random_state=None):
+    def __init__(self, k, main_folder, net_conditions, metrics, random_state=None, shuffle=False):
         self.k = k
         self.main_folder = main_folder
         self.net_conditions = net_conditions
         self.metrics = metrics
         self.random_state = random_state
+        self.shuffle = shuffle
 
     def split(self):
         # return a list of dict1 elements {net_cond_str: dict2}, dict2 is {metric: dict3}, dict3 is {"train"/"test": list of file tuples}
         cross_validation_splits = [{} for _ in range(self.k)]
 
-        kf = KFold(n_splits=self.k, random_state=self.random_state, shuffle=True)
+        kf = KFold(n_splits=self.k, random_state=self.random_state, shuffle=self.shuffle)
         for net_cond in self.net_conditions:
             cond_folder = os.path.join(self.main_folder, net_cond)
             for metric in self.metrics:
                 print(f'net condition: {net_cond}\n', f'metric: {metric}\n----------------------')
-                file_tuples_list = create_file_tuples_list(cond_folder, metric)
+                file_tuples_list = create_file_tuples_list_rtp(cond_folder, metric)
                 X = np.array(file_tuples_list)
                 idx = 1
                 for train_index, test_index in kf.split(X):
@@ -57,6 +58,28 @@ def create_file_tuples_list(main_folder, metric):
         if os.path.isdir(folder_path):
             # Find the pcap file (starting with 'pcap' and ending with '.csv')
             pcap_file = next((f for f in os.listdir(folder_path) if f.startswith('pcap') and f.endswith('.csv')), None)
+
+            # Find the labels file (starting with 'metric' and ending with '.csv')
+            labels_file = next((f for f in os.listdir(folder_path) if f.startswith(metric) and f.endswith('.csv')),
+                               None)
+
+            # Add the tuple of paths to the list
+            if pcap_file and labels_file:
+                tuples_list.append((os.path.join(folder_path, pcap_file), os.path.join(folder_path, labels_file)))
+
+    return tuples_list
+
+def create_file_tuples_list_rtp(main_folder, metric):
+    tuples_list = []
+
+    # Iterate over all folders in the main folder
+    for folder_name in os.listdir(main_folder):
+        folder_path = os.path.join(main_folder, folder_name)
+
+        # Check if the item is a directory
+        if os.path.isdir(folder_path):
+            # Find the pcap file (starting with 'pcap' and ending with '.csv')
+            pcap_file = next((f for f in os.listdir(folder_path) if f.startswith('pcap') and f.endswith('Rtp.csv')), None)
 
             # Find the labels file (starting with 'metric' and ending with '.csv')
             labels_file = next((f for f in os.listdir(folder_path) if f.startswith(metric) and f.endswith('.csv')),
@@ -100,15 +123,17 @@ def filter_video_frames_rtp(pcap, vca):
     return pcap[condition]
 
 
-def read_net_file(filename):
-    csv_columns = ['frame.time_relative', 'frame.time_epoch', 'ip.src', 'ip.dst', 'ip.proto', 'ip.len', 'udp.srcport', 'udp.dstport', 'udp.length', 'brisque']
+def read_net_file(dataset, filename):
+    csv_columns = ['frame.time_relative', 'frame.time_epoch', 'ip.src', 'ip.dst', 'ip.proto', 'ip.len', 'udp.srcport', 'udp.dstport', 'udp.length', 'rtp.ssrc', 'rtp.timestamp', 'rtp.seq', 'rtp.p_type', 'rtp.marker']
     df_net = pd.read_csv(filename)
     try:
         ip_addr = df_net.groupby('ip.dst').agg({'udp.length': sum}).reset_index().sort_values(by='udp.length', ascending=False).head(1)['ip.dst'].iloc[0]
     except IndexError:
         return
-    df_net = df_net[(df_net["ip.dst"] == ip_addr)]
+    df_net = df_net[(df_net["ip.dst"] == ip_addr) & (~pd.isna(df_net["rtp.ssrc"]))]
     df_net = df_net[~df_net['ip.proto'].isna()]
+    df_net['rtp.p_type'] = df_net['rtp.p_type'].apply(filter_ptype)
+    df_net['rtp.p_type'] = df_net['rtp.p_type'].dropna()
     df_net['ip.proto'] = df_net['ip.proto'].astype(str)
     df_net = df_net[df_net['ip.proto'].str.contains(',') == False]
     df_net['ip.proto'] = df_net['ip.proto'].apply(lambda x: int(float(x)))
@@ -116,6 +141,7 @@ def read_net_file(filename):
     if df_net.empty:
         return
     return df_net
+
 
 
 def is_freeze(x):

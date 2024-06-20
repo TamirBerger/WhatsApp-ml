@@ -36,6 +36,115 @@ class FeatureExtractor:
 
         return feature_data
 
+    def extract_rtp_features(self, df_net):
+        df_net['rtp.timestamp'] = df_net['rtp.timestamp'].astype(float)
+        df_net['rank'] = list(range(df_net.shape[0]))
+        df_net['rtp.seq'] = df_net['rtp.seq'].astype(int)
+        feature_data = {'vid_ts_unique': [], 'rtx_ts_unique': [], 'vid_marker_sum': [], 'rtx_marker_sum': [],
+                        'common_vid_rtx_ts_unique': [], 'union_ts_unique': [], 'ooo_seqno_vid': [],
+                        'buffer_time_mean': [], 'buffer_time_std': [], 'buffer_time_min': [], 'buffer_time_max': [],
+                        'buffer_time_q1': [], 'buffer_time_q2': [], 'buffer_time_q3': [], 'n_pkt_diff_mean': [],
+                        'n_pkt_diff_std': [], 'n_pkt_diff_min': [], 'n_pkt_diff_max': [], 'n_pkt_diff_q1': [],
+                        'n_pkt_diff_q2': [], 'n_pkt_diff_q3': [], 'rtp_lag_mean': [], 'rtp_lag_std': [],
+                        'rtp_lag_min': [], 'rtp_lag_max': [], 'rtp_lag_q1': [], 'rtp_lag_q2': [], 'rtp_lag_q3': [],
+                        'et': []}
+        prev = df_net['time_normed'].iloc[0]
+        uniq_vid_ts = set()
+        uniq_rtx_ts = set()
+        uniq_common_ts = set()
+        uniq_union_ts = set()
+        vid_marker_sum = 0
+        rtx_marker_sum = 0
+        ooo_seqno_vid = 0
+        min_rank = defaultdict(lambda: 1000000)
+        max_rank = defaultdict(lambda: -1)
+        window_size = self.config['prediction_window']
+        ft = df_net.groupby('rtp.timestamp').agg(time_normed_min=('time_normed', 'min'),
+                                                 time_normed_max=('time_normed', 'max')).reset_index()
+        ft = ft.sort_values(by='rtp.timestamp')
+        rtp2idx = {ft['rtp.timestamp'][i]: i for i in range(ft.shape[0])}
+        rtp0 = ft['rtp.timestamp'][0]
+        t0 = ft.iloc[0]['time_normed_max']
+        last_pkt = defaultdict(lambda: 0)
+        lags = defaultdict(lambda: 0)
+        idx = 0
+        for j, row in df_net.iterrows():
+            last_pkt[row['rtp.timestamp']] = idx
+            idx += 1
+        for i in range(df_net.shape[0]):
+            curr = df_net.iloc[i]['rtp.timestamp']
+            ridx = rtp2idx[curr]
+            if last_pkt[curr] == i:
+                actual_dur = ft[ft['rtp.timestamp'] == curr]['time_normed_max'].iloc[0] - t0
+                expected_dur = (curr - rtp0) / 90000
+                lags[curr] = actual_dur - expected_dur
+            if df_net.iloc[i]['rtp.p_type'] in self.config['video_ptype']:
+                uniq_vid_ts.add(df_net.iloc[i]['rtp.timestamp'])
+                vid_marker_sum += df_net.iloc[i]['rtp.marker']
+                if i > 0 and (df_net.iloc[i]['rtp.seq'] - df_net.iloc[i - 1]['rtp.seq'] != 1):
+                    ooo_seqno_vid += 1
+            if df_net.iloc[i]['rtp.p_type'] in self.config['rtx_ptype']:
+                uniq_rtx_ts.add(df_net.iloc[i]['rtp.timestamp'])
+                rtx_marker_sum += df_net.iloc[i]['rtp.marker']
+
+            if df_net['time_normed'].iloc[i] - prev > window_size:
+                if len(uniq_vid_ts) > 0 or len(uniq_rtx_ts) > 0:
+                    btime = 90 / np.diff(np.array(sorted(list(uniq_vid_ts.union(uniq_rtx_ts)))))
+                    rank_arr = []
+                    for ts, rank in min_rank.items():
+                        d = max_rank[ts] - rank
+                        rank_arr.append(d)
+                    feature_data = self.calculate_stats(feature_data, 'buffer_time', btime, 0)
+                    lag_arr = []
+                    for l in lags:
+                        lag_arr.append(lags[l])
+                    feature_data['vid_ts_unique'].append(len(uniq_vid_ts))
+                    feature_data['rtx_ts_unique'].append(len(uniq_rtx_ts))
+                    feature_data['common_vid_rtx_ts_unique'].append(len(uniq_rtx_ts.intersection(uniq_vid_ts)))
+                    feature_data['union_ts_unique'].append(len(uniq_rtx_ts.union(uniq_vid_ts)))
+                    feature_data['vid_marker_sum'].append(vid_marker_sum)
+                    feature_data['rtx_marker_sum'].append(rtx_marker_sum)
+                    feature_data['ooo_seqno_vid'].append(ooo_seqno_vid)
+
+                    feature_data = self.calculate_stats(feature_data, 'n_pkt_diff', rank_arr, -1)
+                    feature_data = self.calculate_stats(feature_data, 'rtp_lag', lag_arr, 100000)
+
+                    feature_data['et'].append(df_net.iloc[i]['time'])
+                    uniq_vid_ts = set()
+                    uniq_rtx_ts = set()
+                    uniq_common_ts = set()
+                    vid_marker_sum = 0
+                    rtx_marker_sum = 0
+                    ooo_seqno_vid = 0
+                    min_rank = defaultdict(lambda: 1000000)
+                    max_rank = defaultdict(lambda: -1)
+                    lags = defaultdict(lambda: 0)
+
+                prev = df_net['time_normed'].iloc[i]
+        if len(uniq_vid_ts) > 0 or len(uniq_rtx_ts) > 0:
+            btime = 90 / np.diff(np.array(sorted(list(uniq_vid_ts.union(uniq_rtx_ts)))))
+            rank_arr = []
+            for ts, rank in min_rank.items():
+                d = max_rank[ts] - rank
+                rank_arr.append(d)
+            feature_data['vid_ts_unique'].append(len(uniq_vid_ts))
+            feature_data['rtx_ts_unique'].append(len(uniq_rtx_ts))
+            feature_data['common_vid_rtx_ts_unique'].append(len(uniq_rtx_ts.intersection(uniq_vid_ts)))
+            feature_data['union_ts_unique'].append(len(uniq_rtx_ts.union(uniq_vid_ts)))
+            feature_data['vid_marker_sum'].append(vid_marker_sum)
+            feature_data['rtx_marker_sum'].append(rtx_marker_sum)
+            feature_data['ooo_seqno_vid'].append(ooo_seqno_vid)
+            feature_data = self.calculate_stats(feature_data, 'buffer_time', btime, 0)
+            feature_data = self.calculate_stats(feature_data, 'n_pkt_diff', rank_arr, -1)
+            lag_arr = []
+            for l in lags:
+                lag_arr.append(lags[l])
+            feature_data = self.calculate_stats(feature_data, 'rtp_lag', lag_arr, 100000)
+            feature_data['et'].append(df_net.iloc[i]['time'])
+        df = pd.DataFrame(feature_data)
+        df['et'] = df['et'].apply(lambda x: int(x))
+        return df
+
     def extract_features(self, df_net):
         features = []
         for feature_type in self.feature_subset:

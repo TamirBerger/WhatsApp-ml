@@ -23,8 +23,10 @@ import pickle
 # from util.file_processor import FileValidator
 # from util.data_splitter import KfoldCVOverFiles
 from models.ip_udp_ml import IP_UDP_ML
+from models.rtp_ml_ours import RTP_ML
+
 from models.ip_udp_heuristic import IP_UDP_Heuristic
-from util.helper_functions import create_file_tuples_list, KfoldCVOverFiles
+from util.helper_functions import create_file_tuples_list, KfoldCVOverFiles, create_file_tuples_list_rtp
 
 
 class ModelRunner:
@@ -126,6 +128,17 @@ class ModelRunner:
             )
             model.train(split_files)
 
+        elif self.estimation_method == 'rtp-ml':
+
+            model = RTP_ML(
+                feature_subset=self.feature_subset,
+                estimator=self.estimator,
+                config=project_config,
+                metric=self.metric,
+                dataset=bname,
+                my_ip_l=self.my_ip_l
+            )
+            model.train(split_files)
 
         elif self.estimation_method == 'ip-udp-heuristic':
             model = IP_UDP_Heuristic(
@@ -149,6 +162,9 @@ class ModelRunner:
             print(
                 f'Testing {self.estimation_method} on file {idx} out of {total}...')
             output = model.estimate(file_tuple)
+
+            output = output.dropna()
+
             if output is None:
                 idx += 1
                 predictions.append(output)
@@ -281,16 +297,16 @@ if __name__ == '__main__':
 
     my_ip_l = ['10.100.102.32', '192.168.0.102', '10.0.0.115']
     metrics = ['fps', 'brisque']  # what to predict
-    estimation_methods = ['ip-udp-ml']  # how to predict
+    estimation_methods = ['rtp-ml', 'ip-udp-ml']  # model selection
     #estimation_methods = ['ip-udp-heuristic', 'ip-udp-ml']  # how to predict
 
     # groups of features as per `features.feature_extraction.py`
     feature_subsets = [['LSTATS', 'TSTATS']]
     # network conditions set
-    net_conditions = ["bandwidth", "loss", "falls"]
+    net_conditions = ["bandwidth", "loss", "falls", "bandwidth_old"]
     # train/test network conditions subset
-    net_conditions_train = [["bandwidth", "loss", "falls"]]
-    net_conditions_test = [["bandwidth"], ["loss"], ["falls"]]
+    net_conditions_train = [["falls"]]
+    net_conditions_test = [["falls"]]
 
     data_dir = ["C:\\final_project\git_repo\data_collection"]
 
@@ -307,7 +323,7 @@ if __name__ == '__main__':
 
     # Create 5-fold cross validation splits and validate files. Refer `util/validator.py` for more details
 
-    kcv = KfoldCVOverFiles(5, data_dir[0], net_conditions, metrics, 42)
+    kcv = KfoldCVOverFiles(5, data_dir[0], net_conditions, metrics, None, False)
     file_splits = kcv.split()
 
     #with open(f'{intermediates_dir}/cv_splits.pkl', 'wb') as fd:
@@ -318,7 +334,7 @@ if __name__ == '__main__':
     param_list = [metrics, estimation_methods, feature_subsets, net_conditions_train, net_conditions_test, data_dir]
 
     # Run models over 5 cross validations
-
+    n = 1
     for metric, estimation_method, feature_subset, net_conds_subset_train, net_conds_subset_test, data_dir in product(*param_list):
         if metric == 'brisque' and 'heuristic' in estimation_method:
             continue
@@ -355,6 +371,9 @@ if __name__ == '__main__':
             metric_net_cond_preds.append(preds)
 
         cmobine_preds = pd.concat(vca_preds, axis=0)
+        cmobine_preds.to_csv(f'cmobine_preds_{metric}_{"-".join(net_conds_subset_train)}_{"-".join(net_conds_subset_test)}_{n}.csv', index=False)
+        n += 1
+
         print(f'===========================\n===========================\n'
               f'train net condition subset: {" ".join(net_conds_subset_train)}\n'
               f'test net condition subset: {" ".join(net_conds_subset_test)}\n'

@@ -19,8 +19,10 @@ import pickle
 #from util.file_processor import FileValidator
 #from util.data_splitter import KfoldCVOverFiles
 from models.ip_udp_ml import IP_UDP_ML
+from models.rtp_ml_ours import RTP_ML
+
 from models.ip_udp_heuristic import IP_UDP_Heuristic
-from util.helper_functions import create_file_tuples_list
+from util.helper_functions import create_file_tuples_list, create_file_tuples_list_rtp
 
 
 class ModelRunner:
@@ -112,6 +114,17 @@ class ModelRunner:
             )
             model.train(split_files)
 
+        elif self.estimation_method == 'rtp-ml':
+
+            model = RTP_ML(
+                feature_subset=self.feature_subset,
+                estimator=self.estimator,
+                config=project_config,
+                metric=self.metric,
+                dataset=bname,
+                my_ip_l=self.my_ip_l
+            )
+            model.train(split_files)
 
         elif self.estimation_method == 'ip-udp-heuristic':
             model = IP_UDP_Heuristic(
@@ -209,9 +222,9 @@ if __name__ == '__main__':
     # Example usage
 
     metric = 'brisque'
-    estimation_method = 'ip-udp-ml'
+    estimation_method = 'rtp-ml'
     feature_subset = ['LSTATS', 'TSTATS']
-    data_dirs = ["C:\\final_project\git_repo\data_collection\\bandwidth", "C:\\final_project\git_repo\data_collection\\falls"]
+    data_dirs = ["C:\\final_project\git_repo\data_collection\\falls"]
     #data_dirs = ["C:\\final_project\git_repo\data_collection\\falls"]
     my_ip_l = ['10.100.102.32', '192.168.0.102', '10.0.0.115']
 
@@ -219,11 +232,11 @@ if __name__ == '__main__':
     # train
     file_tuples_list = []
     for dir in data_dirs:
-        file_tuples_list += create_file_tuples_list(dir, metric)
+        file_tuples_list += create_file_tuples_list_rtp(dir, metric)
     vca_model = model_runner.train_model(file_tuples_list)
 
     # test
-    file_tuples_list_test = create_file_tuples_list("C:\\final_project\pcap_files_test", metric)
+    file_tuples_list_test = create_file_tuples_list_rtp("C:\\final_project\pcap_files_test", metric)
     predictions = model_runner.get_test_set_predictions(file_tuples_list_test, vca_model)
     vca_model.display_top5_features()
     print("---------")
