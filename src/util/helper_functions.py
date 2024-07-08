@@ -24,12 +24,15 @@ class KfoldCVOverFiles:
 
     def split(self):
         # return a list of dict1 elements {net_cond_str: dict2}, dict2 is {metric: dict3}, dict3 is {"train"/"test": list of file tuples}
+
         cross_validation_splits = [{} for _ in range(self.k)]
 
         kf = KFold(n_splits=self.k, random_state=self.random_state, shuffle=self.shuffle)
         for net_cond in self.net_conditions:
             cond_folder = os.path.join(self.main_folder, net_cond)
             for metric in self.metrics:
+                if metric == 'quality':
+                    metric = 'brisque'
                 print(f'net condition: {net_cond}\n', f'metric: {metric}\n----------------------')
                 file_tuples_list = create_file_tuples_list_rtp(cond_folder, metric)
                 X = np.array(file_tuples_list)

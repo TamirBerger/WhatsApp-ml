@@ -61,11 +61,10 @@ class IP_UDP_ML:
                 ip_addr = df_net.groupby('ip.src').agg({'udp.length': sum}).reset_index(
                 ).sort_values(by='udp.length', ascending=False).head(2)['ip.src'].iloc[1]
 
-            print('src ip:', ip_addr)
+            print('src ip:', ip_addr, ' - file name:', csv_file)
             # filters the DataFrame to retain only rows: 'ip.proto' is equal to 17, 'ip.src' is equal to ip_addr
             df_net = df_net[(df_net['ip.proto'] == 17) & (df_net['ip.src'] == ip_addr)]
 
-            #if self.metric != 'bps':
             df_net = df_net[df_net['udp.length'] > 306]
             df_net = df_net.rename(columns={
                                    'udp.length': 'length', 'frame.time_epoch': 'time', 'frame.time_relative': 'time_normed'})
@@ -97,14 +96,13 @@ class IP_UDP_ML:
                     print(f'File: Removed {removed_count} samples with screenshots_num < 30')
                     df_merged = df_merged[df_merged.columns.difference(['screenshots_num'])]
 
-
-            if self.metric == 'bps':
-                prev_samples_num = df_merged.shape[0]
-                df_merged = df_merged[(df_merged['bps'] < 1.7 * df_merged['l_num_bytes'] * 8) & (
-                            df_merged['bps'] > 0.3 * df_merged['l_num_bytes'] * 8)]
-                df_merged = df_merged[(df_merged['bps'] < 3000000) & (df_merged['bps'] > 0)]
-                curr_samples_num = df_merged.shape[0]
-                print(f'{prev_samples_num - curr_samples_num} samples were filtered.\nsamples num after filtering: {curr_samples_num}\n')
+            if self.metric == 'quality':
+                df_merged['quality'] = np.select([(df_merged['brisque'] < 20),
+                                                  (df_merged['brisque'] >= 20) & (df_merged['brisque'] < 40),
+                                                  (df_merged['brisque'] >= 40) & (df_merged['brisque'] < 60),
+                                                  (df_merged['brisque'] >= 60) & (df_merged['brisque'] < 80)],
+                                                  [1, 2, 3, 4], default=5)
+                df_merged = df_merged[df_merged.columns.difference(['brisque'])]
 
             #if self.metric == 'brisque':
             #    df_merged['brisque'] = df_merged['brisque'].round().astype(int)
@@ -138,6 +136,8 @@ class IP_UDP_ML:
             print('\nCalculating feature importance...\n')
             for idx, col in enumerate(X.columns):
                 self.feature_importances[col] = self.estimator.feature_importances_[idx]
+
+        return X, y
 
     def estimate(self, file_tuple):
         csv_file = file_tuple[0]
@@ -189,14 +189,16 @@ class IP_UDP_ML:
         df_merged = df_merged.drop(df_merged.index[-1:])  # Drop the last row
 
         if self.metric == 'fps':
-            if 'screenshots_num' in df_merged.columns:  # Discarding samples with less than 45 screenshots
+            if 'screenshots_num' in df_merged.columns:
                 df_merged = df_merged[df_merged.columns.difference(['screenshots_num'])]
 
-        if self.metric == 'bps':
-            df_merged = df_merged[(df_merged['bps'] < 1.7 * df_merged['l_num_bytes'] * 8) & (
-                        df_merged['bps'] > 0.3 * df_merged['l_num_bytes'] * 8)]
-            df_merged = df_merged[(df_merged['bps'] < 3000000) & (df_merged['bps'] > 0)]
-            print(f'df_merge shape after filtering: {df_merged.shape[0]}')
+        if self.metric == 'quality':
+            df_merged['quality'] = np.select([(df_merged['brisque'] < 20),
+                                              (df_merged['brisque'] >= 20) & (df_merged['brisque'] < 40),
+                                              (df_merged['brisque'] >= 40) & (df_merged['brisque'] < 60),
+                                              (df_merged['brisque'] >= 60) & (df_merged['brisque'] < 80)],
+                                              [1, 2, 3, 4], default=5)
+            df_merged = df_merged[df_merged.columns.difference(['brisque'])]
 
         if self.metric == 'brisque':
             df_merged['brisque'] = df_merged['brisque'].round().astype(int)
@@ -211,12 +213,9 @@ class IP_UDP_ML:
         y_pred = self.estimator.predict(X)
         if y_pred.ndim == 2 and y_pred.shape[1] == 1:
             y_pred = np.squeeze(y_pred)
-        if self.metric == 'framesPerSecond' or self.metric == 'framesRendered' or self.metric == 'framesReceived' or self.metric == 'framesReceivedPerSecond':
+        if self.metric == 'fps':
             y_pred = list(map(lambda x: round(x), y_pred))
             y_test = y_test.apply(lambda x: round(x))
-        if self.metric == 'fps' or self .metric == 'bps':
-            y_pred = list(map(lambda x: round(x), y_pred))
-
         X[self.metric+'_ip-udp-ml'] = y_pred
         X[self.metric+'_gt'] = y_test
         X['timestamp'] = timestamps

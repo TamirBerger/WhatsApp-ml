@@ -66,7 +66,8 @@ class RTP_ML:
                 ip_addr = df_net.groupby('ip.src').agg({'udp.length': sum}).reset_index(
                 ).sort_values(by='udp.length', ascending=False).head(2)['ip.src'].iloc[1]
 
-            print('src ip:', ip_addr)
+            print('src ip:', ip_addr, ' - file name:', csv_file)
+
             # filters the DataFrame to retain only rows: 'ip.proto' is equal to 17, 'ip.src' is equal to ip_addr,
             #                                            'trp.ssrc' is not na
             df_net = df_net[(df_net['ip.proto'] == 17) & (df_net['ip.src'] == ip_addr) & (~pd.isna(df_net["rtp.ssrc"]))]

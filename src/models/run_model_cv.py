@@ -2,11 +2,16 @@ from collections import defaultdict
 from itertools import product
 from datetime import datetime as dt
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
 from pathlib import Path
 from sklearn.metrics import mean_absolute_error, accuracy_score, r2_score
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from xgboost import XGBClassifier, XGBRegressor
 from catboost import CatBoostRegressor, CatBoostClassifier
+from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
+import gc
 
 import os
 import time
@@ -36,12 +41,13 @@ class ModelRunner:
 
         self.metric = metric  # label
         self.estimation_method = estimation_method  # model name
+        # RandomForestRegressor on brisque score metric
         self.estimator = RandomForestClassifier() if self.metric == 'resolution' or self.metric == 'fps' \
-            else RandomForestRegressor()
-        #self.estimator = XGBClassifier() if self.metric == 'resolution' or self.metric == 'fps' \
-        #    else XGBRegressor()
-        #self.estimator = CatBoostClassifier(logging_level='Silent') if self.metric == 'resolution' or self.metric == 'fps' \
-        #    else CatBoostRegressor(logging_level='Silent')
+                                                     or self.metric == 'quality' else RandomForestRegressor()
+        #self.estimator = XGBClassifier() if self.metric == 'resolution' or self.metric == 'fps' or\
+        #                                    self.metric == 'quality' else XGBRegressor()
+        #self.estimator = CatBoostClassifier(logging_level='Silent') if self.metric == 'resolution' or self.metric == 'fps'\
+        #                                    or self.metric == 'quality' else CatBoostRegressor(logging_level='Silent')
         # features subset from ['SIZE' 'IAT', 'LSTATS', 'TSTATS']
         self.feature_subset = 'none' if feature_subset is None else feature_subset
         self.data_dir = data_dir
@@ -58,7 +64,7 @@ class ModelRunner:
 
         self.trial_id = '_'.join(
             [metric, net_cond_train_tag, self.estimation_method,
-             net_cond_test_tag, f'cv_idx{cv_idx}'])
+             net_cond_test_tag, f'cv_idx{cv_index}'])
 
         self.intermediates_dir = f'{self.data_dir}_intermediates/{self.trial_id}'
 
@@ -84,14 +90,14 @@ class ModelRunner:
             data_object = pickle.load(fd)
         return data_object
 
-    def fps_prediction_accuracy(self, pred, truth):
+    def fps_prediction_accuracy(self, pred, truth, margin_err):
         # check accuracy of frame per second prediction
         # correct if |pred - label| <= 2, else incorrect
         n = len(pred)
         df = pd.DataFrame({'pred': pred.to_numpy(), 'truth': truth.to_numpy()})
         df['deviation'] = df['pred'] - df['truth']
         df['deviation'] = df['deviation'].abs()
-        return len(df[df['deviation'] <= 2]) / n
+        return len(df[df['deviation'] <= margin_err]) / n
 
     def bps_prediction_accuracy(self, pred, truth):
         # check accuracy of bit per second prediction
@@ -148,11 +154,13 @@ class ModelRunner:
         #self.save_intermediate(vca_model, 'vca_model')
         return vca_model
 
-    def get_test_set_predictions(self, split_files, vca_model):
+    def get_test_set_predictions(self, split_files, vca_model, low_margin, high_margin):
         predictions = []
         maes = []
         accs = []
         r2_scores = []
+        acc_margin_lists = []
+        acc_by_margin = {}
 
         idx = 1
         total = len(split_files)
@@ -171,7 +179,7 @@ class ModelRunner:
                 continue
 
             # if the model isn't classifier calculate MAE and R2 score
-            if self.metric != 'resolution':
+            if self.metric != 'resolution' and self.metric != 'quality':
                 mae = mean_absolute_error(
                     output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'])
                 print(f'MAE = {round(mae, 2)}')
@@ -183,24 +191,19 @@ class ModelRunner:
                 r2_scores.append(r2)
 
             else:  # classifier model: calculate classification accuracy
-                a = accuracy_score(
+                acc = accuracy_score(
                     output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'])
                 print(f'Accuracy = {round(acc, 2) * 100}%')
-                accs.append(a)
+                accs.append(acc)
 
             # calculate fps prediction accuracy (correct: absolute difference <= 2)
             if self.metric == 'fps':
                 acc = self.fps_prediction_accuracy(
-                    output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'])
+                    output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'], 2)
                 accs.append(acc)
                 print(f'Accuracy = {round(acc, 2) * 100}%')
 
-            # calculate bps prediction accuracy (correct: absolute difference <= 10% of truth)
-            if self.metric == 'bps':
-                acc = self.bps_prediction_accuracy(
-                    output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'])
-                accs.append(acc)
-                print(f'Accuracy = {round(acc, 2) * 100}%')
+                acc_margin_lists.append(self.fps_acc_by_margin_error(output, low_margin, high_margin))
 
             # calculate bps prediction accuracy (correct: absolute difference <= 5)
             if self.metric == 'brisque':
@@ -213,21 +216,28 @@ class ModelRunner:
             predictions.append(output)
             print("---------\n")
 
-        if self.metric == 'resolution':
+        if self.metric == 'fps':
+            for margin_err in range(low_margin, high_margin):
+                acc_sum = 0
+                for l in acc_margin_lists:
+                    acc_sum += l[margin_err]
+                acc_by_margin[margin_err] = round(100 * acc_sum / len(acc_margin_lists), 2)
+
+        if self.metric == 'resolution' or self.metric == 'quality':
             mae_avg = "None"
+            r2_avg = "None"
         else:
             mae_avg = round(sum(maes) / len(maes), 2)
             r2_avg = round(sum(r2_scores) / len(r2_scores), 2)
-        accuracy_str = ''
-        if self.metric == 'fps' or self.metric == 'bps' or self.metric == 'brisque':
-            acc_avg = round(100 * sum(accs) / len(accs), 2)
-            accuracy_str = f'|| Accuracy_avg = {acc_avg}'
+        #accuracy_str = ''
+        acc_avg = round(100 * sum(accs) / len(accs), 2)
+        accuracy_str = f'|| Accuracy_avg = {acc_avg}'
         line = f'{dt.now()}\tExperiment : {self.trial_id} || MAE_avg = {mae_avg} || R2_avg = {r2_avg} {accuracy_str}\n'
-        with open('C:\\final_project\git_repo\data_collection_intermediates\\log-rand_split-rf.txt', 'a') as fd1:
+        with open('C:\\final_project\git_repo\data_collection_intermediates\\log-rf.txt', 'a') as fd1:
             fd1.write(line)
 
         #self.save_intermediate(predictions, 'predictions')
-        return predictions
+        return predictions, mae_avg, r2_avg, acc_avg, acc_by_margin
 
     def get_avg_cv_predictions(self, output):
 
@@ -236,7 +246,7 @@ class ModelRunner:
         r2_scores = []
 
         # if the model isn't classifier calculate MAE and R2 score
-        if self.metric != 'resolution':
+        if self.metric != 'resolution' or self.metric != 'quality':
             mae = mean_absolute_error(
                 output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'])
             print(f'MAE = {round(mae, 2)}')
@@ -256,14 +266,7 @@ class ModelRunner:
         # calculate fps prediction accuracy (correct: absolute difference <= 2)
         if self.metric == 'fps':
             acc = self.fps_prediction_accuracy(
-                output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'])
-            accs.append(acc)
-            print(f'Accuracy = {round(acc, 2) * 100}%')
-
-        # calculate bps prediction accuracy (correct: absolute difference <= 10% of truth)
-        if self.metric == 'bps':
-            acc = self.bps_prediction_accuracy(
-                output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'])
+                output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'], 2)
             accs.append(acc)
             print(f'Accuracy = {round(acc, 2) * 100}%')
 
@@ -276,40 +279,184 @@ class ModelRunner:
 
         print("---------\n")
 
-        if self.metric == 'resolution':
+        if self.metric == 'resolution' or self.metric == 'quality':
             mae_avg = "None"
+            r2_avg = "None"
         else:
             mae_avg = round(sum(maes) / len(maes), 2)
             r2_avg = round(sum(r2_scores) / len(r2_scores), 2)
         accuracy_str = ''
-        if self.metric == 'fps' or self.metric == 'bps' or self.metric == 'brisque':
-            acc_avg = round(100 * sum(accs) / len(accs), 2)
-            accuracy_str = f'|| Accuracy_avg = {acc_avg}'
+        acc_avg = round(100 * sum(accs) / len(accs), 2)
+        accuracy_str = f'|| Accuracy_avg = {acc_avg}'
         line = f'{dt.now()}\tExperiment : {self.trial_id[:-1]}avg || MAE_avg = {mae_avg} || R2_avg = {r2_avg} {accuracy_str}\n'
-        with open('C:\\final_project\git_repo\data_collection_intermediates\\log-avg-rand_split-rf.txt', 'a') as fd1:
-            fd1.write(line)
+        with open('C:\\final_project\git_repo\data_collection_intermediates\\log-avg-rand_split-rf.txt', 'a') as fd:
+            fd.write(line)
 
         #self.save_intermediate(output, 'predictions_cv-avg')
 
 
-if __name__ == '__main__':
-    # Example usage
+    def fps_acc_by_margin_error(self, output, low_margin, high_margin):
+        acc_list = []
+        for margin_err in range(low_margin, high_margin):
+            acc_list.append(self.fps_prediction_accuracy(output[f'{self.metric}_gt'],
+                                                                 output[f'{self.metric}_{self.estimation_method}'],
+                                                                 margin_err))
+        return acc_list
 
-    my_ip_l = ['10.100.102.32', '192.168.0.102', '10.0.0.115']
-    metrics = ['fps', 'brisque']  # what to predict
-    estimation_methods = ['rtp-ml', 'ip-udp-ml']  # model selection
-    #estimation_methods = ['ip-udp-heuristic', 'ip-udp-ml']  # how to predict
+
+    def hyperparameter_tuning(self, metric):
+        # Hyperparameter tuning for random forest model
+
+        # Number of trees in random forest
+        n_estimators = [int(x) for x in np.linspace(start=200, stop=2000, num=5)]
+        # Number of features to consider at every split
+        max_features = ['sqrt', 'log2', None]
+        # Maximum number of levels in tree
+        max_depth = [int(x) for x in np.linspace(10, 50, num=5)]
+        max_depth.append(None)
+        # Minimum number of samples required to split a node
+        min_samples_split = [2, 5, 10]
+        # Minimum number of samples required at each leaf node
+        min_samples_leaf = [1, 2, 4]
+        # Method of selecting samples for training each tree
+        bootstrap = [True, False]
+        # Create the random grid
+        random_grid = {'n_estimators': n_estimators,
+                       'max_features': max_features,
+                       'max_depth': max_depth,
+                       'min_samples_split': min_samples_split,
+                       'min_samples_leaf': min_samples_leaf,
+                       'bootstrap': bootstrap}
+        print(random_grid)
+
+        # Use the random grid to search for best hyperparameters
+        skf = StratifiedKFold(n_splits=3)
+        # First create the base model to tune
+        #rf = RandomForestRegressor()
+        # Random search of parameters, using 3 fold cross validation,
+        # search across 100 different combinations, and use all available cores
+        rf_random = RandomizedSearchCV(estimator=self.estimator, param_distributions=random_grid, n_iter=20, cv=skf, verbose=2,
+                                       random_state=42, n_jobs=-1)
+
+        file_tuples_list = []
+        #data_dirs = ["C:\\final_project\git_repo\data_collection\\falls"]
+        for data_dir in self.data_dir:
+            for dir in data_dir:
+                file_tuples_list += create_file_tuples_list(dir, metric)
+
+        bname = os.path.basename(self.data_dir)
+
+        if self.estimation_method == 'ip-udp-ml':
+
+            model = IP_UDP_ML(
+                feature_subset=self.feature_subset,
+                estimator=self.estimator,
+                config=project_config,
+                metric=self.metric,
+                dataset=bname,
+                my_ip_l=self.my_ip_l
+            )
+            train_features, train_labels = model.train(file_tuples_list)
+
+        else:  # self.estimation_method == 'rtp-ml':
+
+            model = RTP_ML(
+                feature_subset=self.feature_subset,
+                estimator=self.estimator,
+                config=project_config,
+                metric=self.metric,
+                dataset=bname,
+                my_ip_l=self.my_ip_l
+            )
+            train_features, train_labels = model.train(file_tuples_list)
+        # Fit the random search model
+        rf_random.fit(train_features, train_labels)
+        print(rf_random.best_params_)
+        best_random = rf_random.best_estimator_
+
+        # Save the best model
+        #joblib.dump(best_random, f"best_random_forest_{metric}.pkl")
+
+        # Clear memory
+        del train_features, train_labels, rf_random
+        gc.collect()
+
+        return best_random
+
+
+def plot_acc_by_margin_err(data, name):
+    # Extracting keys and values from the dictionary
+    margin_errors = list(data.keys())
+    accuracies = list(data.values())
+
+    # Convert accuracy values to integers for yticks
+    yticks = [int(value) for value in accuracies]
+
+    # Creating the plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(margin_errors, accuracies, marker='o', linestyle='-', color='b')
+    plt.title('Model Accuracy by Margin Error')
+    plt.xlabel('Margin Error')
+    plt.ylabel('Accuracy Percentage')
+    plt.grid(True)
+    plt.xticks(margin_errors)
+    plt.yticks(range(min(yticks), max(yticks) + 1, 5))  # Adjusting the step to 5 for better readability
+    plt.show()
+    plt.savefig(f'C:\\final_project\\notes and docs\\fps by margin err - {name}.png')
+    plt.close()
+
+
+if __name__ == '__main__':
+
+    my_ip_l = ['10.100.102.32', '192.168.0.102', '10.0.0.115', '192.168.0.100', '192.168.0.103', '192.168.0.104']
+    metrics = ['fps', 'brisque', 'quality']  # labels
+    estimation_methods = ['ip-udp-ml']  # model selection: ['ip-udp-heuristic', 'ip-udp-ml']
 
     # groups of features as per `features.feature_extraction.py`
     feature_subsets = [['LSTATS', 'TSTATS']]
     # network conditions set
-    net_conditions = ["bandwidth", "loss", "falls", "bandwidth_old"]
+    net_conditions = ["loss", "falls", "bandwidth"]
+    #net_conditions = ["loss-0", "loss-1", "loss-2", "loss-5", "loss-10", "falls", "bandwidth"]
+
     # train/test network conditions subset
-    net_conditions_train = [["falls"]]
-    net_conditions_test = [["falls"]]
+    #net_conditions_train = [["falls"]]
+    #net_conditions_test = [["falls"]]
+
+    # train/test network conditions subset as tuples
+    #net_conditions_train_test = [(["bandwidth"], ["bandwidth"]), (["bandwidth_old"], ["bandwidth_old"]),
+    #                  (["falls"], ["falls"]), (["loss"], ["loss"]),
+    #                  (["bandwidth", "bandwidth_old"], ["bandwidth", "bandwidth_old"]),
+    #                  (["bandwidth", "falls"], ["bandwidth", "falls"]),
+    #                  (["bandwidth", "loss"], ["bandwidth", "loss"]),
+    #                  (["bandwidth_old", "falls"], ["bandwidth_old", "falls"]),
+    #                  (["bandwidth_old", "loss"], ["bandwidth_old", "loss"]),
+    #                  (["loss", "falls"], ["loss", "falls"]),
+    #                  (["bandwidth", "bandwidth_old", "loss"], ["bandwidth", "bandwidth_old", "loss"]),
+    #                  (["bandwidth", "bandwidth_old", "falls"], ["bandwidth", "bandwidth_old", "falls"]),
+    #                  (["bandwidth", "bandwidth_old", "falls", "loss"], ["bandwidth", "bandwidth_old", "falls", "loss"])
+    #                  ]
+
+    net_conditions_train_test = [
+                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-0"]),
+                                #(["loss-0"], ["loss-0"]),
+                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-1"]),
+                                #(["loss-1"], ["loss-1"]),
+                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-2"]),
+                                #(["loss-2"], ["loss-2"]),
+                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-5"]),
+                                #(["loss-5"], ["loss-5"]),
+                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-10"]),
+                                #(["loss-10"], ["loss-10"]),
+                                #(["bandwidth", "falls", "loss"], ["bandwidth", "falls", "loss"])
+                                #(['bandwidth'], ['bandwidth']), (["falls"], ["falls"]), (["loss"], ["loss"]),
+                                #(["bandwidth", "falls", "loss"], ["bandwidth"]),
+                                #(["bandwidth", "falls", "loss"], ["falls"]),
+                                #(["bandwidth", "falls", "loss"], ["loss"])
+                                ]
 
     data_dir = ["C:\\final_project\git_repo\data_collection"]
 
+    low_margin_err, high_margin_err = 0, 7
 
     bname = os.path.basename(data_dir[0])
 
@@ -323,7 +470,8 @@ if __name__ == '__main__':
 
     # Create 5-fold cross validation splits and validate files. Refer `util/validator.py` for more details
 
-    kcv = KfoldCVOverFiles(5, data_dir[0], net_conditions, metrics, None, False)
+    kcv = KfoldCVOverFiles(4, data_dir[0], net_conditions, metrics, None, False)  # random: seed num, True
+                                                                                  # by order: None, False
     file_splits = kcv.split()
 
     #with open(f'{intermediates_dir}/cv_splits.pkl', 'wb') as fd:
@@ -331,36 +479,73 @@ if __name__ == '__main__':
 
     #vca_preds = defaultdict(list)
 
-    param_list = [metrics, estimation_methods, feature_subsets, net_conditions_train, net_conditions_test, data_dir]
-
+    #param_list = [metrics, estimation_methods, feature_subsets, net_conditions_train, net_conditions_test, data_dir]
+    param_list = [metrics, estimation_methods, feature_subsets, net_conditions_train_test, data_dir]
     # Run models over 5 cross validations
     n = 1
-    for metric, estimation_method, feature_subset, net_conds_subset_train, net_conds_subset_test, data_dir in product(*param_list):
-        if metric == 'brisque' and 'heuristic' in estimation_method:
+    #for metric, estimation_method, feature_subset, net_conds_subset_train, net_conds_subset_test, data_dir in product(*param_list):
+    for metric, estimation_method, feature_subset, net_conditions_train_test, data_dir in product(*param_list):
+
+        net_conds_subset_train = net_conditions_train_test[0]
+        net_conds_subset_test = net_conditions_train_test[1]
+        if (metric == 'brisque' or metric == 'quality') and 'heuristic' in estimation_method:
             continue
+        line = f'\n===================================================\n' \
+               f'Train net condition: {" ".join(net_conds_subset_train)}\n' \
+               f'Test net condition: {" ".join(net_conds_subset_test)}\n' \
+               f'Metric: {metric}\n' \
+               f'Estimation_method: {estimation_method}\n'
+        with open('C:\\final_project\git_repo\data_collection_intermediates\\log-avg-rf.txt', 'a') as fd:
+            fd.write(line)
+        with open('C:\\final_project\git_repo\data_collection_intermediates\\log-rf.txt', 'a') as fd:
+            fd.write(line)
+        print(line)
+
+        #model_runner = ModelRunner(
+        #    metric, estimation_method, feature_subset, data_dir, 1, my_ip_l, net_conds_subset_train,
+        #    net_conds_subset_test)
+        #best_estimator = model_runner.hyperparameter_tuning(metric)
+
         vca_preds = []
-        metric_net_cond_preds = []
+        #metric_net_cond_preds = []
         models = []
+        acc_list = []
+        r2_list = []
+        mae_list = []
+        acc_by_margin_list = []
         cv_idx = 1
         for fsp in file_splits:
 
+            if metric == 'quality':
+                metric_s = 'brisque'
+            else:
+                metric_s = metric
             # create train and test file tuples lists
             train_file_tuple_list = []
             for net_cond in net_conditions:
                 if net_cond in net_conds_subset_train:
-                    train_file_tuple_list += fsp[net_cond][metric]["train"]
+                    train_file_tuple_list += fsp[net_cond][metric_s]["train"]
 
             test_file_tuple_list = []
             for net_cond in net_conditions:
                 if net_cond in net_conds_subset_test:
-                    test_file_tuple_list += fsp[net_cond][metric]["test"]
+                    test_file_tuple_list += fsp[net_cond][metric_s]["test"]
 
             model_runner = ModelRunner(
                 metric, estimation_method, feature_subset, data_dir, cv_idx, my_ip_l, net_conds_subset_train, net_conds_subset_test)
+
+            # hyperparameter tuning
+            #model_runner.estimator = best_estimator
+
             vca_model = model_runner.train_model(train_file_tuple_list)
-            Path(f'{intermediates_dir}/{model_runner.trial_id}').mkdir(exist_ok=True, parents=True)
-            predictions = model_runner.get_test_set_predictions(test_file_tuple_list, vca_model)
-            models.append(vca_model)
+            #vca_model.display_top5_features()
+            #Path(f'{intermediates_dir}/{model_runner.trial_id}').mkdir(exist_ok=True, parents=True)
+            predictions, mae, r2, acc, acc_by_margin = model_runner.get_test_set_predictions(test_file_tuple_list, vca_model, low_margin_err, high_margin_err)
+            mae_list.append(mae)
+            r2_list.append(r2)
+            acc_list.append(acc)
+            acc_by_margin_list.append(acc_by_margin)
+            #models.append(vca_model)
             #with open(f'{intermediates_dir}/{model_runner.trial_id}/model.pkl', 'wb') as fd:
             #    pickle.dump(vca_model, fd)
             preds = pd.concat(predictions, axis=0)
@@ -368,17 +553,43 @@ if __name__ == '__main__':
             #with open(f'{intermediates_dir}/{model_runner.trial_id}/predictions.pkl', 'wb') as fd:
             #    pickle.dump(preds, fd)
             cv_idx += 1
-            metric_net_cond_preds.append(preds)
+            #metric_net_cond_preds.append(preds)
 
-        cmobine_preds = pd.concat(vca_preds, axis=0)
-        cmobine_preds.to_csv(f'cmobine_preds_{metric}_{"-".join(net_conds_subset_train)}_{"-".join(net_conds_subset_test)}_{n}.csv', index=False)
+        # calculate results by average all cross validations
+        if metric == 'fps':
+            acc_by_margin_avg_dict = {}
+            for margin_err in range(low_margin_err, high_margin_err):
+                acc_sum = 0
+                for d in acc_by_margin_list:
+                    acc_sum += d[margin_err]
+                acc_by_margin_avg_dict[margin_err] = round(acc_sum / (cv_idx - 1), 2)
+
+            plot_acc_by_margin_err(acc_by_margin_avg_dict, {" ".join(net_conds_subset_train)} + " - " + {" ".join(net_conds_subset_test)})
+
+
+        if metric != 'resolution' and metric != 'quality':
+            mae_avg = round(sum(mae_list)/(cv_idx-1), 2)
+            r2_avg = round(sum([abs(i) for i in r2_list])/(cv_idx-1), 2)
+        else:
+            mae_avg = r2_avg = "None"
+        acc_avg = round(sum(acc_list)/(cv_idx-1), 2)
         n += 1
+        line = f'{dt.now()}\tExperiment : {metric}_{"-".join(net_conds_subset_train)} ' \
+               f'|| MAE_avg = {mae_avg} || R2_avg = {r2_avg} || acc_avg = {acc_avg}\n'
+        with open('C:\\final_project\git_repo\data_collection_intermediates\\log-avg-rf.txt', 'a') as fd:
+            fd.write(line)
 
         print(f'===========================\n===========================\n'
               f'train net condition subset: {" ".join(net_conds_subset_train)}\n'
               f'test net condition subset: {" ".join(net_conds_subset_test)}\n'
               f'metric: {metric}\n'
+              f'estimation_method: {estimation_method}\n'
               f'===========================\n===========================\n'
               )
-        model_runner.get_avg_cv_predictions(cmobine_preds)
+        print(line)
+
+        # calculate results from total predictions
+        combine_preds = pd.concat(vca_preds, axis=0)
+        combine_preds.to_csv(f'combine_preds{metric}_{"-".join(net_conds_subset_train)}_{"-".join(net_conds_subset_test)}.csv', index=False)
+        #model_runner.get_avg_cv_predictions(combine_preds)
 

@@ -1,5 +1,5 @@
 catboost_info/
 *.png
-data collection_intermediates/
+data_collection_intermediates/
 __pycache__/
 data_collection/
