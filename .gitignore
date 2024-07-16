@@ -3,3 +3,5 @@ catboost_info/
 data_collection_intermediates/
 __pycache__/
 data_collection/
+src/venv/
+src/.idea/
