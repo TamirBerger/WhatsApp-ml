@@ -41,11 +41,11 @@ class ModelRunner:
 
         self.metric = metric  # label
         self.estimation_method = estimation_method  # model name
-        # RandomForestRegressor on brisque score metric
-        self.estimator = RandomForestClassifier() if self.metric == 'resolution' or self.metric == 'fps' \
-                                                     or self.metric == 'quality' else RandomForestRegressor()
-        #self.estimator = XGBClassifier() if self.metric == 'resolution' or self.metric == 'fps' or\
-        #                                    self.metric == 'quality' else XGBRegressor()
+        # RandomForestRegressor on brisque and piqe score metric
+        self.estimator = RandomForestClassifier() if self.metric == 'fps' or self.metric == 'quality-brisque' \
+                                                     or self.metric == 'quality-piqe' else RandomForestRegressor()
+        #self.estimator = XGBClassifier() if self.metric == 'fps' or self.metric == 'quality-brisque' \
+        #                                    or self.metric == 'quality-piqe' else XGBRegressor()
         #self.estimator = CatBoostClassifier(logging_level='Silent') if self.metric == 'resolution' or self.metric == 'fps'\
         #                                    or self.metric == 'quality' else CatBoostRegressor(logging_level='Silent')
         # features subset from ['SIZE' 'IAT', 'LSTATS', 'TSTATS']
@@ -119,6 +119,15 @@ class ModelRunner:
         df['deviation'] = df['deviation'].abs()
         return len(df[df['deviation'] <= 5]) / n
 
+    def piqe_prediction_accuracy(self, pred, truth):
+        # check accuracy of piqe prediction
+        # correct if |pred - label| <= 5, else incorrect
+        n = len(pred)
+        df = pd.DataFrame({'pred': pred.to_numpy(), 'truth': truth.to_numpy()})
+        df['deviation'] = df['pred'] - df['truth']
+        df['deviation'] = df['deviation'].abs()
+        return len(df[df['deviation'] <= 5]) / n
+
     def train_model(self, split_files):
         bname = os.path.basename(self.data_dir)
 
@@ -179,7 +188,7 @@ class ModelRunner:
                 continue
 
             # if the model isn't classifier calculate MAE and R2 score
-            if self.metric != 'resolution' and self.metric != 'quality':
+            if self.metric != 'quality-brisque' and self.metric != 'quality-piqe':
                 mae = mean_absolute_error(
                     output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'])
                 print(f'MAE = {round(mae, 2)}')
@@ -205,9 +214,16 @@ class ModelRunner:
 
                 acc_margin_lists.append(self.fps_acc_by_margin_error(output, low_margin, high_margin))
 
-            # calculate bps prediction accuracy (correct: absolute difference <= 5)
+            # calculate brisque prediction accuracy (correct: absolute difference <= 5)
             if self.metric == 'brisque':
                 acc = self.brisque_prediction_accuracy(
+                    output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'])
+                accs.append(acc)
+                print(f'Accuracy = {round(acc, 2) * 100}%')
+
+            # calculate piqe prediction accuracy (correct: absolute difference <= 5)
+            if self.metric == 'piqe':
+                acc = self.piqe_prediction_accuracy(
                     output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'])
                 accs.append(acc)
                 print(f'Accuracy = {round(acc, 2) * 100}%')
@@ -223,7 +239,7 @@ class ModelRunner:
                     acc_sum += l[margin_err]
                 acc_by_margin[margin_err] = round(100 * acc_sum / len(acc_margin_lists), 2)
 
-        if self.metric == 'resolution' or self.metric == 'quality':
+        if self.metric == 'quality-brisque' or self.metric == 'quality-piqe':
             mae_avg = "None"
             r2_avg = "None"
         else:
@@ -246,7 +262,7 @@ class ModelRunner:
         r2_scores = []
 
         # if the model isn't classifier calculate MAE and R2 score
-        if self.metric != 'resolution' or self.metric != 'quality':
+        if self.metric != 'quality-piqe' or self.metric != 'quality-brisque':
             mae = mean_absolute_error(
                 output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'])
             print(f'MAE = {round(mae, 2)}')
@@ -270,16 +286,23 @@ class ModelRunner:
             accs.append(acc)
             print(f'Accuracy = {round(acc, 2) * 100}%')
 
-        # calculate bps prediction accuracy (correct: absolute difference <= 5)
+        # calculate brisque prediction accuracy (correct: absolute difference <= 5)
         if self.metric == 'brisque':
             acc = self.brisque_prediction_accuracy(
                 output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'])
             accs.append(acc)
             print(f'Accuracy = {round(acc, 2) * 100}%')
 
+        # calculate piqe prediction accuracy (correct: absolute difference <= 5)
+        if self.metric == 'piqe':
+            acc = self.piqe_prediction_accuracy(
+                output[f'{self.metric}_gt'], output[f'{self.metric}_{self.estimation_method}'])
+            accs.append(acc)
+            print(f'Accuracy = {round(acc, 2) * 100}%')
+
         print("---------\n")
 
-        if self.metric == 'resolution' or self.metric == 'quality':
+        if self.metric == 'quality-brisque' or self.metric == 'quality-piqe':
             mae_avg = "None"
             r2_avg = "None"
         else:
@@ -308,11 +331,11 @@ class ModelRunner:
         # Hyperparameter tuning for random forest model
 
         # Number of trees in random forest
-        n_estimators = [int(x) for x in np.linspace(start=200, stop=2000, num=5)]
+        n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=5)]
         # Number of features to consider at every split
         max_features = ['sqrt', 'log2', None]
         # Maximum number of levels in tree
-        max_depth = [int(x) for x in np.linspace(10, 50, num=5)]
+        max_depth = [int(x) for x in np.linspace(10, 100, num=10)]
         max_depth.append(None)
         # Minimum number of samples required to split a node
         min_samples_split = [2, 5, 10]
@@ -409,14 +432,14 @@ def plot_acc_by_margin_err(data, name):
 if __name__ == '__main__':
 
     my_ip_l = ['10.100.102.32', '192.168.0.102', '10.0.0.115', '192.168.0.100', '192.168.0.103', '192.168.0.104']
-    metrics = ['fps', 'brisque', 'quality']  # labels
+    metrics = ['quality-piqe', 'quality-brisque']  # labels
     estimation_methods = ['ip-udp-ml']  # model selection: ['ip-udp-heuristic', 'ip-udp-ml']
 
     # groups of features as per `features.feature_extraction.py`
     feature_subsets = [['LSTATS', 'TSTATS']]
     # network conditions set
-    net_conditions = ["loss", "falls", "bandwidth"]
-    #net_conditions = ["loss-0", "loss-1", "loss-2", "loss-5", "loss-10", "falls", "bandwidth"]
+    #net_conditions = ["loss", "falls", "bandwidth"]
+    net_conditions = ["loss-0", "loss-1", "loss-2", "loss-5", "loss-10", "falls", "bandwidth"]
 
     # train/test network conditions subset
     #net_conditions_train = [["falls"]]
@@ -446,7 +469,11 @@ if __name__ == '__main__':
                                 #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-5"]),
                                 #(["loss-5"], ["loss-5"]),
                                 #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-10"]),
-                                #(["loss-10"], ["loss-10"]),
+                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["bandwidth"]),
+                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["falls"]),
+                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"],
+                                # ["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"])
+                                (["loss-10"], ["loss-10"]),
                                 #(["bandwidth", "falls", "loss"], ["bandwidth", "falls", "loss"])
                                 #(['bandwidth'], ['bandwidth']), (["falls"], ["falls"]), (["loss"], ["loss"]),
                                 #(["bandwidth", "falls", "loss"], ["bandwidth"]),
@@ -488,7 +515,7 @@ if __name__ == '__main__':
 
         net_conds_subset_train = net_conditions_train_test[0]
         net_conds_subset_test = net_conditions_train_test[1]
-        if (metric == 'brisque' or metric == 'quality') and 'heuristic' in estimation_method:
+        if (metric == 'brisque' or metric == 'quality-brisque' or metric == 'quality-piqe' or metric == 'piqe') and 'heuristic' in estimation_method:
             continue
         line = f'\n===================================================\n' \
                f'Train net condition: {" ".join(net_conds_subset_train)}\n' \
@@ -516,8 +543,10 @@ if __name__ == '__main__':
         cv_idx = 1
         for fsp in file_splits:
 
-            if metric == 'quality':
+            if metric == 'quality-brisque':
                 metric_s = 'brisque'
+            elif metric == 'quality-piqe' or metric == 'piqe':
+                metric_s = 'brisque_piqe'
             else:
                 metric_s = metric
             # create train and test file tuples lists
@@ -567,7 +596,7 @@ if __name__ == '__main__':
             plot_acc_by_margin_err(acc_by_margin_avg_dict, {" ".join(net_conds_subset_train)} + " - " + {" ".join(net_conds_subset_test)})
 
 
-        if metric != 'resolution' and metric != 'quality':
+        if metric != 'resolution' and metric != 'quality-brisque' and metric != 'quality-piqe':
             mae_avg = round(sum(mae_list)/(cv_idx-1), 2)
             r2_avg = round(sum([abs(i) for i in r2_list])/(cv_idx-1), 2)
         else:

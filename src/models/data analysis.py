@@ -13,6 +13,7 @@ sys.path.append(d)
 from util.feature_extraction import FeatureExtractor
 from util.config import project_config
 from util.helper_functions import filter_ptype
+from sklearn.metrics import confusion_matrix, accuracy_score
 
 
 class DataAnalyzer:
@@ -112,7 +113,11 @@ class DataAnalyzer:
             for i, labels_file in enumerate(file_tuple):
                 if i == 0:
                     continue    # advance pcap file
+
                 df_labels = pd.read_csv(labels_file)
+                if labels_file.endswith('brisque_piqeLabels.csv'):
+                    df_labels = df_labels[df_labels.columns.difference(['brisque'])]
+
                 df_merged = pd.merge(df_merged, df_labels, on='et')
             df_merged = df_merged.drop(df_merged.index[0])  # Drop the first row
             df_merged = df_merged.drop(df_merged.index[-1:])  # Drop the last  row
@@ -127,11 +132,17 @@ class DataAnalyzer:
                 df_merged = df_merged[df_merged.columns.difference(['screenshots_num'])]
 
             # add quality metric from brisque score
-            df_merged['quality'] = np.select([(df_merged['brisque'] < 20),
+            df_merged['quality-brisque'] = np.select([(df_merged['brisque'] < 20),
                                               (df_merged['brisque'] >= 20) & (df_merged['brisque'] < 40),
                                               (df_merged['brisque'] >= 40) & (df_merged['brisque'] < 60),
                                               (df_merged['brisque'] >= 60) & (df_merged['brisque'] < 80)],
                                              [1, 2, 3, 4], default=5)
+            # add quality metric from piqe score
+            df_merged['quality-piqe'] = np.select([(df_merged['piqe'] < 21),
+                                                      (df_merged['piqe'] >= 21) & (df_merged['piqe'] < 36),
+                                                      (df_merged['piqe'] >= 36) & (df_merged['piqe'] < 51),
+                                                      (df_merged['piqe'] >= 51) & (df_merged['piqe'] < 81)],
+                                                     [1, 2, 3, 4], default=5)
 
             # if self.metric == 'brisque':
             #    df_merged['brisque'] = df_merged['brisque'].round().astype(int)
@@ -318,6 +329,9 @@ class DataAnalyzer:
                 # Find the labels files (starting with 'metric' and ending with '.csv')
                 files_list = []
                 for metric in metrics:
+                    if metric == 'piqe':
+                        metric = 'brisque_piqe'
+
                     files_list.append(next((f for f in os.listdir(folder_path) if f.startswith(metric)
                                         and f.endswith('.csv')), None))
 
@@ -328,35 +342,55 @@ class DataAnalyzer:
 
         return tuples_list
 
-
     def histogram_density_plot(self, df, header):
-        # Plot histogram and density function of packets length by 'udp.length'
+        if header == 'l_num_bytes':
+            header_plot = 'Bandwidth'
+        elif header == 'l_num_pkts':
+            header_plot = 'Packets Count'
+        elif header == 'l_mean':
+            header_plot = 'Packets Mean Length'
+        else:
+            header_plot = header
+
         plt.figure(figsize=(12, 6))
 
         plt.subplot(1, 3, 1)
         sns.histplot(df[header], bins=10, kde=False)
-        plt.title(f'Histogram of {header}')
-        plt.xlabel(header)
+        plt.title(f'Histogram of {header_plot}')
+        plt.xlabel(header_plot)
         plt.ylabel('Frequency')
 
         plt.subplot(1, 3, 2)
         sns.kdeplot(df[header], shade=True)
-        plt.title(f'Density Plot of {header}')
-        plt.xlabel(header)
+        plt.title(f'Density Plot of {header_plot}')
+        plt.xlabel(header_plot)
         plt.ylabel('Density')
 
         plt.subplot(1, 3, 3)
-        sns.ecdfplot(df[header])
-        plt.title(f'CDF Plot of {header}')
-        plt.xlabel(header)
+        ecdf = sns.ecdfplot(df[header])
+        plt.title(f'CDF Plot of {header_plot}')
+        plt.xlabel(header_plot)
         plt.ylabel('CDF')
 
+        # Annotate the y-axis with the y-values at the steps for the 'quality' header
+        if header == 'quality-brisque' or header == 'quality-piqe':
+            sorted_data = df[header].sort_values().values
+            n = len(sorted_data)
+            y_values = []
+            for i, val in enumerate(sorted_data):
+                y = (i + 1) / n
+                if i == 0 or sorted_data[i] != sorted_data[i - 1]:  # Only annotate at steps
+                    y_values.append(y)
+
+            # Set custom y-ticks
+            plt.gca().set_yticks(y_values)
+            plt.gca().set_yticklabels([f'{y:.2f}' for y in y_values])
+
         plt.tight_layout()
-        plt.savefig(f'C:\\final_project\\notes and docs\\histogram_density_CDF_{header}.png')
+        plt.savefig(f'C:\\final_project\\notes and docs\\histogram_density_CDF_{header_plot}.png')
         plt.close()
 
-
-    def rtp_classified(self, df):
+    def rtp_classifier(self, df):
         # Group data by 'rtp.p_type' and calculate statistics for 'udp.length'
         stats = df.groupby('rtp.p_type')['udp.length'].describe().reset_index()
 
@@ -430,10 +464,126 @@ class DataAnalyzer:
         # Show statistics
         print(stats)
 
+    def find_length_treshold(self, df, video_p_types, audio_p_type):
+        # Ensure columns exist
+        if 'udp.length' not in df.columns or 'rtp.p_type' not in df.columns:
+            raise ValueError("DataFrame must contain 'udp.length' and 'rtp.p_type' columns")
+
+        # Check for missing values
+        if df['udp.length'].isnull().any() or df['rtp.p_type'].isnull().any():
+            print("Data contains missing values. Consider handling them before proceeding.")
+            df = df.dropna(subset=['udp.length', 'rtp.p_type'])
+
+        # Convert rtp.p_type to integer
+        df['rtp.p_type'] = df['rtp.p_type'].astype(int)
+
+        # Debugging: Display unique rtp.p_type values and a few sample rows
+        print("Unique rtp.p_type values in the DataFrame:", df['rtp.p_type'].unique())
+        print("Sample data from the DataFrame:")
+        print(df.head())
+
+        # Split the data into video and audio
+        video_df = df[df['rtp.p_type'].isin(video_p_types)]
+        audio_df = df[df['rtp.p_type'] == audio_p_type]
+
+        # Debugging: Display number of video and audio packets found
+        print(f"Number of video packets found: {len(video_df)}")
+        print(f"Number of audio packets found: {len(audio_df)}")
+
+        # Check if there are any video or audio packets
+        if video_df.empty:
+            print("No video packets found.")
+        if audio_df.empty:
+            print("No audio packets found.")
+
+        # Plot the udp.length distribution
+        plt.hist(video_df['udp.length'], bins=20, alpha=0.5, label='Video')
+        plt.hist(audio_df['udp.length'], bins=20, alpha=0.5, label='Audio')
+        plt.xlabel('UDP Length')
+        plt.ylabel('Frequency')
+        plt.legend(loc='upper right')
+        plt.show()
+
+        # Calculate means for initial midpoint calculation
+        video_mean = video_df['udp.length'].mean()
+        audio_mean = audio_df['udp.length'].mean()
+
+        # Generate possible thresholds to evaluate - 100 potential thresholds between means
+        potential_thresholds = np.linspace(audio_mean, video_mean, num=100)
+
+        best_threshold = None
+        best_accuracy = 0
+
+        # Evaluate each threshold
+        for threshold in potential_thresholds:
+            df['predicted_group'] = df['udp.length'].apply(lambda x: 'video' if x > threshold else 'audio')
+            df['actual_group'] = df['rtp.p_type'].apply(lambda x: 'video' if x in video_p_types else 'audio')
+
+            accuracy = accuracy_score(df['actual_group'], df['predicted_group'])
+
+            if accuracy > best_accuracy:
+                best_accuracy = accuracy
+                best_threshold = threshold
+
+        # Print the best threshold and its accuracy
+        print(f'The best threshold to divide video and audio is: {best_threshold}')
+        print(f'Accuracy of the best threshold: {best_accuracy}')
+
+        # Display the DataFrame with predictions
+        print(df[['udp.length', 'rtp.p_type', 'predicted_group', 'actual_group']].head())
+
+    def generate_confusion_matrix_table(self, df, video_p_types, audio_p_type, best_threshold):
+        # Ensure columns exist
+        if 'udp.length' not in df.columns or 'rtp.p_type' not in df.columns:
+            raise ValueError("DataFrame must contain 'udp.length' and 'rtp.p_type' columns")
+
+        # Check for missing values
+        if df['udp.length'].isnull().any() or df['rtp.p_type'].isnull().any():
+            print("Data contains missing values. Consider handling them before proceeding.")
+            df = df.dropna(subset=['udp.length', 'rtp.p_type'])
+
+        # Convert rtp.p_type to integer
+        df['rtp.p_type'] = df['rtp.p_type'].astype(int)
+
+        # Validate the threshold by calculating the confusion matrix
+        df['predicted_group'] = df['udp.length'].apply(lambda x: 'video' if x > best_threshold else 'audio')
+        df['actual_group'] = df['rtp.p_type'].apply(lambda x: 'video' if x in video_p_types else 'audio')
+
+        conf_matrix = confusion_matrix(df['actual_group'], df['predicted_group'], labels=['audio', 'video'])
+
+        # Create a DataFrame to display the confusion matrix
+        conf_matrix_df = pd.DataFrame(conf_matrix,
+                                      index=['Actual Non-video', 'Actual Video'],
+                                      columns=['Predicted Non-video', 'Predicted Video'])
+
+        # Add a 'Total' column
+        conf_matrix_df['Total'] = conf_matrix_df.sum(axis=1)
+
+        # Add a 'Total' row
+        conf_matrix_df.loc['Total'] = conf_matrix_df.sum()
+
+        # Print the confusion matrix
+        print(conf_matrix_df)
+
+        # Display percentages in the confusion matrix
+        conf_matrix_percentage = conf_matrix / conf_matrix_df['Total'][:-1].values[:, None] * 100
+        conf_matrix_percentage_df = pd.DataFrame(conf_matrix_percentage,
+                                                 index=['Actual Non-video', 'Actual Video'],
+                                                 columns=['Predicted Non-video', 'Predicted Video'])
+
+        # Print the confusion matrix with percentages
+        print(conf_matrix_percentage_df)
+
+        # Display the confusion matrix in a similar format to the given table
+        combined_matrix = conf_matrix_percentage_df.copy()
+        combined_matrix['Total'] = conf_matrix_df['Total'][:-1]
+        print(combined_matrix)
+
 
 if __name__ == '__main__':
 
-    metrics = ['brisque', 'fps']
+    best_threshold = 274  # Accuracy of the best threshold: 0.9998766692302314
+    metrics = ['brisque', 'fps', 'piqe']
     estimation_method = 'ip-udp-ml'
     feature_subset = ['LSTATS', 'TSTATS']
     data_dirs = ["C:\\final_project\git_repo\data_collection\\falls",
@@ -452,23 +602,33 @@ if __name__ == '__main__':
         file_tuples_list += data_analyzer.create_file_tuples_list(dir, metrics)
 
     # union packets data frame
+
     #union_packets_df = data_analyzer.union_packets_df(file_tuples_list)
     #data_analyzer.histogram_density_plot(union_packets_df, 'udp.length')
 
     # union traffic features and QoE metrics data frame
+
     union_df = data_analyzer.union_df(file_tuples_list)
+    data_analyzer.histogram_density_plot(union_df, 'piqe')
+    data_analyzer.histogram_density_plot(union_df, 'quality-piqe')
     data_analyzer.histogram_density_plot(union_df, 'fps')
     data_analyzer.histogram_density_plot(union_df, 'brisque')
-    data_analyzer.histogram_density_plot(union_df, 'quality')
+    data_analyzer.histogram_density_plot(union_df, 'quality-brisque')
+    data_analyzer.histogram_density_plot(union_df, 'l_num_bytes')
+    data_analyzer.histogram_density_plot(union_df, 'l_num_pkts')
+    data_analyzer.histogram_density_plot(union_df, 'l_mean')
+
 
     # correlation matrix
-    correlation_matrix = union_df.corr().abs()
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5)
-    plt.title('Correlation Matrix')
-    plt.show()
+
+    #correlation_matrix = union_df.corr().abs()
+    #plt.figure(figsize=(10, 8))
+    #sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5)
+    #plt.title('Correlation Matrix')
+    #plt.show()
 
     # union traffic features and QoE metrics data frame RTP
+
     #union_df_rtp = data_analyzer.union_df_rtp(file_tuples_list)
     #data_analyzer.histogram_density_plot(union_df_rtp, 'brisque')
     #correlation_matrix_rtp = union_df_rtp.corr().abs()
@@ -488,9 +648,13 @@ if __name__ == '__main__':
     #print("\nCorrelations with 'brisque':")
     #print(correlation_brisque)
 
-    # union packets data frame
-    union_packets_df_rtp = data_analyzer.union_packets_df_rtp(file_tuples_list)
-    union_packets_df_rtp.to_csv('C:\\final_project\\notes and docs\\union_packets_rtp.csv', index=False)
-    data_analyzer.rtp_classified(union_packets_df_rtp)
+    # union packets RTP data frame
+
+    #union_packets_df_rtp = data_analyzer.union_packets_df_rtp(file_tuples_list)
+    #data_analyzer.find_length_treshold(union_packets_df_rtp, [97, 103], 120)
+    #data_analyzer.generate_confusion_matrix_table(union_packets_df_rtp, [97, 103], 120, best_threshold)
+
+    #union_packets_df_rtp.to_csv('C:\\final_project\\notes and docs\\union_packets_rtp.csv', index=False)
+    #data_analyzer.rtp_classifier(union_packets_df_rtp)
 
     print("\n(:\n")

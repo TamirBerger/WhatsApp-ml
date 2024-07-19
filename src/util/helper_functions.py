@@ -31,8 +31,11 @@ class KfoldCVOverFiles:
         for net_cond in self.net_conditions:
             cond_folder = os.path.join(self.main_folder, net_cond)
             for metric in self.metrics:
-                if metric == 'quality':
+                if metric == 'quality-brisque':
                     metric = 'brisque'
+                elif metric == 'piqe' or metric == 'quality-piqe':
+                    metric = 'brisque_piqe'
+
                 print(f'net condition: {net_cond}\n', f'metric: {metric}\n----------------------')
                 file_tuples_list = create_file_tuples_list_rtp(cond_folder, metric)
                 X = np.array(file_tuples_list)

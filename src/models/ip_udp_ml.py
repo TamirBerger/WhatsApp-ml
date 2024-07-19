@@ -96,13 +96,21 @@ class IP_UDP_ML:
                     print(f'File: Removed {removed_count} samples with screenshots_num < 30')
                     df_merged = df_merged[df_merged.columns.difference(['screenshots_num'])]
 
-            if self.metric == 'quality':
-                df_merged['quality'] = np.select([(df_merged['brisque'] < 20),
-                                                  (df_merged['brisque'] >= 20) & (df_merged['brisque'] < 40),
-                                                  (df_merged['brisque'] >= 40) & (df_merged['brisque'] < 60),
-                                                  (df_merged['brisque'] >= 60) & (df_merged['brisque'] < 80)],
-                                                  [1, 2, 3, 4], default=5)
+            elif self.metric == 'quality-brisque':
+                df_merged['quality-brisque'] = np.select([(df_merged['brisque'] < 20),
+                                                          (df_merged['brisque'] >= 20) & (df_merged['brisque'] < 40),
+                                                          (df_merged['brisque'] >= 40) & (df_merged['brisque'] < 60),
+                                                          (df_merged['brisque'] >= 60) & (df_merged['brisque'] < 80)],
+                                                         [1, 2, 3, 4], default=5)
                 df_merged = df_merged[df_merged.columns.difference(['brisque'])]
+
+            elif self.metric == 'quality-piqe':
+                df_merged['quality-piqe'] = np.select([(df_merged['piqe'] < 21),
+                                                       (df_merged['piqe'] >= 21) & (df_merged['piqe'] < 36),
+                                                       (df_merged['piqe'] >= 36) & (df_merged['piqe'] < 51),
+                                                       (df_merged['piqe'] >= 51) & (df_merged['piqe'] < 81)],
+                                                      [1, 2, 3, 4], default=5)
+                df_merged = df_merged[df_merged.columns.difference(['brisque', 'piqe'])]
 
             #if self.metric == 'brisque':
             #    df_merged['brisque'] = df_merged['brisque'].round().astype(int)
@@ -192,15 +200,23 @@ class IP_UDP_ML:
             if 'screenshots_num' in df_merged.columns:
                 df_merged = df_merged[df_merged.columns.difference(['screenshots_num'])]
 
-        if self.metric == 'quality':
-            df_merged['quality'] = np.select([(df_merged['brisque'] < 20),
+        elif self.metric == 'quality-brisque':
+            df_merged['quality-brisque'] = np.select([(df_merged['brisque'] < 20),
                                               (df_merged['brisque'] >= 20) & (df_merged['brisque'] < 40),
                                               (df_merged['brisque'] >= 40) & (df_merged['brisque'] < 60),
                                               (df_merged['brisque'] >= 60) & (df_merged['brisque'] < 80)],
                                               [1, 2, 3, 4], default=5)
             df_merged = df_merged[df_merged.columns.difference(['brisque'])]
 
-        if self.metric == 'brisque':
+        elif self.metric == 'quality-piqe':
+            df_merged['quality-piqe'] = np.select([(df_merged['piqe'] < 21),
+                                                      (df_merged['piqe'] >= 21) & (df_merged['piqe'] < 36),
+                                                      (df_merged['piqe'] >= 36) & (df_merged['piqe'] < 51),
+                                                      (df_merged['piqe'] >= 51) & (df_merged['piqe'] < 81)],
+                                                     [1, 2, 3, 4], default=5)
+            df_merged = df_merged[df_merged.columns.difference(['brisque', 'piqe'])]
+
+        elif self.metric == 'brisque':
             df_merged['brisque'] = df_merged['brisque'].round().astype(int)
 
         X = df_merged
