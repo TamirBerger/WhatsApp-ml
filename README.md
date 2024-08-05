@@ -1,2 +1,2 @@
 # WhatsApp-ml
-Estimating QoE of encrypted WhatsApp video communication sessions
+Predicting video QoE metrics from encrypted traffic data.
