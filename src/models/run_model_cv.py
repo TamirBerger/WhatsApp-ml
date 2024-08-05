@@ -249,7 +249,7 @@ class ModelRunner:
         acc_avg = round(100 * sum(accs) / len(accs), 2)
         accuracy_str = f'|| Accuracy_avg = {acc_avg}'
         line = f'{dt.now()}\tExperiment : {self.trial_id} || MAE_avg = {mae_avg} || R2_avg = {r2_avg} {accuracy_str}\n'
-        with open('C:\\final_project\git_repo\data_collection_intermediates\\log-rf.txt', 'a') as fd1:
+        with open('C:\\final_project\git_repo\data_collection_intermediates\\final-log-rf.txt', 'a') as fd1:
             fd1.write(line)
 
         #self.save_intermediate(predictions, 'predictions')
@@ -312,7 +312,7 @@ class ModelRunner:
         acc_avg = round(100 * sum(accs) / len(accs), 2)
         accuracy_str = f'|| Accuracy_avg = {acc_avg}'
         line = f'{dt.now()}\tExperiment : {self.trial_id[:-1]}avg || MAE_avg = {mae_avg} || R2_avg = {r2_avg} {accuracy_str}\n'
-        with open('C:\\final_project\git_repo\data_collection_intermediates\\log-avg-rand_split-rf.txt', 'a') as fd:
+        with open('C:\\final_project\git_repo\data_collection_intermediates\\final-log-avg-rf.txt', 'a') as fd:
             fd.write(line)
 
         #self.save_intermediate(output, 'predictions_cv-avg')
@@ -424,15 +424,15 @@ def plot_acc_by_margin_err(data, name):
     plt.grid(True)
     plt.xticks(margin_errors)
     plt.yticks(range(min(yticks), max(yticks) + 1, 5))  # Adjusting the step to 5 for better readability
-    plt.show()
-    plt.savefig(f'C:\\final_project\\notes and docs\\fps by margin err - {name}.png')
+
+    plt.savefig(f'C:\\final_project\\notes and docs\\final fps by margin err in order\\fps by margin err - {name}.png')
     plt.close()
 
 
 if __name__ == '__main__':
 
     my_ip_l = ['10.100.102.32', '192.168.0.102', '10.0.0.115', '192.168.0.100', '192.168.0.103', '192.168.0.104']
-    metrics = ['quality-piqe', 'quality-brisque']  # labels
+    metrics = ['fps', 'brisque', 'piqe', 'quality-piqe', 'quality-brisque']  # labels
     estimation_methods = ['ip-udp-ml']  # model selection: ['ip-udp-heuristic', 'ip-udp-ml']
 
     # groups of features as per `features.feature_extraction.py`
@@ -445,40 +445,18 @@ if __name__ == '__main__':
     #net_conditions_train = [["falls"]]
     #net_conditions_test = [["falls"]]
 
-    # train/test network conditions subset as tuples
-    #net_conditions_train_test = [(["bandwidth"], ["bandwidth"]), (["bandwidth_old"], ["bandwidth_old"]),
-    #                  (["falls"], ["falls"]), (["loss"], ["loss"]),
-    #                  (["bandwidth", "bandwidth_old"], ["bandwidth", "bandwidth_old"]),
-    #                  (["bandwidth", "falls"], ["bandwidth", "falls"]),
-    #                  (["bandwidth", "loss"], ["bandwidth", "loss"]),
-    #                  (["bandwidth_old", "falls"], ["bandwidth_old", "falls"]),
-    #                  (["bandwidth_old", "loss"], ["bandwidth_old", "loss"]),
-    #                  (["loss", "falls"], ["loss", "falls"]),
-    #                  (["bandwidth", "bandwidth_old", "loss"], ["bandwidth", "bandwidth_old", "loss"]),
-    #                  (["bandwidth", "bandwidth_old", "falls"], ["bandwidth", "bandwidth_old", "falls"]),
-    #                  (["bandwidth", "bandwidth_old", "falls", "loss"], ["bandwidth", "bandwidth_old", "falls", "loss"])
-    #                  ]
 
     net_conditions_train_test = [
-                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-0"]),
-                                #(["loss-0"], ["loss-0"]),
-                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-1"]),
-                                #(["loss-1"], ["loss-1"]),
-                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-2"]),
-                                #(["loss-2"], ["loss-2"]),
-                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-5"]),
-                                #(["loss-5"], ["loss-5"]),
-                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-10"]),
-                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["bandwidth"]),
-                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["falls"]),
-                                #(["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"],
-                                # ["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"])
-                                (["loss-10"], ["loss-10"]),
-                                #(["bandwidth", "falls", "loss"], ["bandwidth", "falls", "loss"])
-                                #(['bandwidth'], ['bandwidth']), (["falls"], ["falls"]), (["loss"], ["loss"]),
-                                #(["bandwidth", "falls", "loss"], ["bandwidth"]),
-                                #(["bandwidth", "falls", "loss"], ["falls"]),
-                                #(["bandwidth", "falls", "loss"], ["loss"])
+                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["bandwidth"]),
+                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["falls"]),
+                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-0"]),
+                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-1"]),
+                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-2"]),
+                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-5"]),
+                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-10"]),
+
+                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"],
+                                 ["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"])
                                 ]
 
     data_dir = ["C:\\final_project\git_repo\data_collection"]
@@ -497,7 +475,7 @@ if __name__ == '__main__':
 
     # Create 5-fold cross validation splits and validate files. Refer `util/validator.py` for more details
 
-    kcv = KfoldCVOverFiles(4, data_dir[0], net_conditions, metrics, None, False)  # random: seed num, True
+    kcv = KfoldCVOverFiles(5, data_dir[0], net_conditions, metrics, None, False)  # random: seed num, True
                                                                                   # by order: None, False
     file_splits = kcv.split()
 
@@ -522,9 +500,9 @@ if __name__ == '__main__':
                f'Test net condition: {" ".join(net_conds_subset_test)}\n' \
                f'Metric: {metric}\n' \
                f'Estimation_method: {estimation_method}\n'
-        with open('C:\\final_project\git_repo\data_collection_intermediates\\log-avg-rf.txt', 'a') as fd:
+        with open('C:\\final_project\git_repo\data_collection_intermediates\\final-log-avg-rf.txt', 'a') as fd:
             fd.write(line)
-        with open('C:\\final_project\git_repo\data_collection_intermediates\\log-rf.txt', 'a') as fd:
+        with open('C:\\final_project\git_repo\data_collection_intermediates\\final-log-rf.txt', 'a') as fd:
             fd.write(line)
         print(line)
 
@@ -567,7 +545,7 @@ if __name__ == '__main__':
             #model_runner.estimator = best_estimator
 
             vca_model = model_runner.train_model(train_file_tuple_list)
-            #vca_model.display_top5_features()
+            vca_model.display_top5_features(" ".join(net_conds_subset_train) + " - " + " ".join(net_conds_subset_test))
             #Path(f'{intermediates_dir}/{model_runner.trial_id}').mkdir(exist_ok=True, parents=True)
             predictions, mae, r2, acc, acc_by_margin = model_runner.get_test_set_predictions(test_file_tuple_list, vca_model, low_margin_err, high_margin_err)
             mae_list.append(mae)
@@ -593,7 +571,7 @@ if __name__ == '__main__':
                     acc_sum += d[margin_err]
                 acc_by_margin_avg_dict[margin_err] = round(acc_sum / (cv_idx - 1), 2)
 
-            plot_acc_by_margin_err(acc_by_margin_avg_dict, {" ".join(net_conds_subset_train)} + " - " + {" ".join(net_conds_subset_test)})
+            plot_acc_by_margin_err(acc_by_margin_avg_dict, " ".join(net_conds_subset_train) + " - " + " ".join(net_conds_subset_test))
 
 
         if metric != 'resolution' and metric != 'quality-brisque' and metric != 'quality-piqe':
@@ -605,7 +583,7 @@ if __name__ == '__main__':
         n += 1
         line = f'{dt.now()}\tExperiment : {metric}_{"-".join(net_conds_subset_train)} ' \
                f'|| MAE_avg = {mae_avg} || R2_avg = {r2_avg} || acc_avg = {acc_avg}\n'
-        with open('C:\\final_project\git_repo\data_collection_intermediates\\log-avg-rf.txt', 'a') as fd:
+        with open('C:\\final_project\git_repo\data_collection_intermediates\\final-log-avg-rf.txt', 'a') as fd:
             fd.write(line)
 
         print(f'===========================\n===========================\n'

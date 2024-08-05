@@ -239,7 +239,7 @@ class IP_UDP_ML:
         X['dataset'] = self.dataset
         return X[[self.metric+'_ip-udp-ml', self.metric+'_gt', 'timestamp', 'file', 'dataset']]
 
-    def display_top5_features(self):
+    def display_top5_features(self, name):
         # Sort the dictionary by values in descending order
         sorted_features = sorted(self.feature_importances.items(), key=lambda item: item[1], reverse=True)
 
@@ -255,4 +255,6 @@ class IP_UDP_ML:
         plt.xlabel('Features')
         plt.ylabel('Importance')
         plt.title('Top 5 Feature Importances')
-        plt.show()
+        #plt.show()
+        plt.savefig(f'C:\\final_project\\notes and docs\\features importance\\fps by margin err - {name}.png')
+        plt.close()

@@ -14,6 +14,7 @@ from util.feature_extraction import FeatureExtractor
 from util.config import project_config
 from util.helper_functions import filter_ptype
 from sklearn.metrics import confusion_matrix, accuracy_score
+import pickle
 
 
 class DataAnalyzer:
@@ -342,13 +343,73 @@ class DataAnalyzer:
 
         return tuples_list
 
+    def cdf_plot(self, df, header):
+        if header == 'l_num_bytes':
+            header_plot = 'Bandwidth (kBps)'
+            df[header] = df[header] / 1000  # Convert to kBps
+        elif header == 'l_num_pkts':
+            header_plot = 'Packet count'
+        elif header == 'l_mean':
+            header_plot = 'Packet average size (bytes)'
+        elif header == 'quality-brisque':
+            header_plot = 'BRISQUE quality rating'
+        elif header == 'quality-piqe':
+            header_plot = 'PIQE quality rating'
+        elif header == 'piqe':
+            header_plot = 'PIQE score'
+        elif header == 'brisque':
+            header_plot = 'BRISQUE score'
+        elif header == 'fps':
+            header_plot = 'Frame rate (fps)'
+        else:
+            header_plot = header
+
+        plt.figure(figsize=(12, 6))
+
+        sns.ecdfplot(df[header], linewidth=5)  # Set the line width to make it bold
+        plt.grid(True)  # Add grid to the plot
+
+        # Annotate the y-axis with the y-values at the steps for the 'quality' header
+        if header in ['quality-brisque', 'quality-piqe']:
+            sorted_data = df[header].sort_values().values
+            n = len(sorted_data)
+            y_values = []
+            for i, val in enumerate(sorted_data):
+                y = (i + 1) / n
+                if i == 0 or sorted_data[i] != sorted_data[i - 1]:  # Only annotate at steps
+                    y_values.append(y)
+
+            # Filter out the 0.03 value from y-ticks
+            y_ticks = [y for y in y_values if y != 0.029919766017153474]
+            plt.gca().set_yticks(y_ticks)
+            plt.gca().set_yticklabels([f'{y:.2f}' for y in y_ticks])
+
+        plt.tick_params(axis='both', which='major', labelsize=32)  # Making axis numbers larger
+        plt.xlabel('', fontsize=34, labelpad=20)
+        plt.ylabel('CDF', fontsize=40, labelpad=20)
+        plt.title('')
+
+        plt.tight_layout()
+        plt.savefig(f'C:\\final_project\\notes and docs\\cdf_plot_{header_plot}.png')
+        plt.close()
+
     def histogram_density_plot(self, df, header):
         if header == 'l_num_bytes':
             header_plot = 'Bandwidth'
         elif header == 'l_num_pkts':
-            header_plot = 'Packets Count'
+            header_plot = 'Packet count'
         elif header == 'l_mean':
-            header_plot = 'Packets Mean Length'
+            header_plot = 'Packet average size (bytes)'
+        elif header == 'quality-brisque':
+            header_plot = 'BRISQUE quality rating'
+        elif header == 'quality-piqe':
+            header_plot = 'PIQE quality rating'
+        elif header == 'piqe':
+            header_plot = 'PIQE score'
+        elif header == 'brisque':
+            header_plot = 'BRISQUE score'
+        elif header == 'fps':
+            header_plot = 'Frame rate (fps)'
         else:
             header_plot = header
 
@@ -464,6 +525,39 @@ class DataAnalyzer:
         # Show statistics
         print(stats)
 
+    def rtp_classifier_cdf(self, df):
+        # Group data by 'rtp.p_type' and calculate statistics for 'udp.length'
+        stats = df.groupby('rtp.p_type')['udp.length'].describe().reset_index()
+
+        # Save statistics to a CSV file
+        stats.to_csv('C:\\final_project\\notes and docs\\udp_length_statistics.csv', index=False)
+
+        # Create a combined CDF plot for each unique 'rtp.p_type'
+        unique_p_types = df['rtp.p_type'].unique()
+        p_type_labels = {120: 'Audio: PT 120', 97: 'Video: PT 97',  103: 'Video reTX: PT 103'}
+
+        plt.figure(figsize=(12, 6))
+        for p_type in unique_p_types:
+            subset = df[df['rtp.p_type'] == p_type]
+            label = p_type_labels.get(p_type, p_type_labels[int(p_type)])
+            sns.ecdfplot(subset['udp.length'], label=label, linewidth=3)  # Making lines bolder
+
+        plt.xlabel('UDP Packet Size (bytes)', fontsize=28, labelpad=20)  # fontweight='bold'
+        plt.ylabel('CDF', fontsize=28, labelpad=20)  # fontweight='bold'
+        plt.grid(True)
+        plt.tick_params(axis='both', which='major', labelsize=20)  # Making axis numbers larger
+        #plt.legend(fontsize=18, title_fontsize='20', loc='upper center', frameon=True,
+        #           fancybox=True, shadow=True)  # Making legend bigger and moving to upper left , title='RTP Payload Types'
+        plt.legend(fontsize=22, title_fontsize='20', loc='upper center', frameon=False,
+                    shadow=True, bbox_to_anchor=(0.5, 1.2), ncol=3)  # frameon=True, fancybox=True,
+
+        plt.tight_layout()
+        plt.savefig('C:\\final_project\\notes and docs\\udp_length_combined_cdf_plot.png')
+        plt.close()
+
+        # Show statistics
+        print(stats)
+
     def find_length_treshold(self, df, video_p_types, audio_p_type):
         # Ensure columns exist
         if 'udp.length' not in df.columns or 'rtp.p_type' not in df.columns:
@@ -507,6 +601,8 @@ class DataAnalyzer:
         # Calculate means for initial midpoint calculation
         video_mean = video_df['udp.length'].mean()
         audio_mean = audio_df['udp.length'].mean()
+        print(f'video mean: {video_mean}')
+        print(f'audio mean: {audio_mean}')
 
         # Generate possible thresholds to evaluate - 100 potential thresholds between means
         potential_thresholds = np.linspace(audio_mean, video_mean, num=100)
@@ -580,14 +676,103 @@ class DataAnalyzer:
         print(combined_matrix)
 
 
+    def calculate_fps_percentages(self, df,):
+        # Define the FPS bins and corresponding labels
+        bins = [0, 5, 10, 15, 20, 21, 22, 23, 24, 25, float('inf')]
+        labels = ['0-5 fps', '5-10 fps', '10-15 fps', '15-20 fps', '20-21 fps', '21-22 fps', '22-23 fps', '23-24 fps', '24-25 fps','Above 25 fps']
+
+        # Cut the 'fps' column into the defined bins
+        df['fps_range'] = pd.cut(df['fps'], bins=bins, labels=labels, right=False)
+
+        # Calculate the percentage of data points in each bin
+        percentages = df['fps_range'].value_counts(normalize=True) * 100
+
+        # Reindex to ensure all labels are present
+        percentages = percentages.reindex(labels, fill_value=0)
+
+        return percentages
+
+    def calculate_bandwidth_percentages(self, df):
+        # Define the FPS bins and corresponding labels
+        bins = [0 * 1000, 50 * 1000, 100 * 1000, 150 * 1000, 200 * 1000, 250 * 1000, 300 * 1000, float('inf')]
+        labels = ['0-50 kBps', '50-100 kBps', '100-150 kBps', '150-200 kBps', '200-250 kBps', '250-300 kBps', 'Above 300 kBps']
+
+        # Cut the 'fps' column into the defined bins
+        df['bandwidth_range'] = pd.cut(df['l_num_bytes'], bins=bins, labels=labels, right=False)
+
+        # Calculate the percentage of data points in each bin
+        percentages = df['bandwidth_range'].value_counts(normalize=True) * 100
+
+        # Reindex to ensure all labels are present
+        percentages = percentages.reindex(labels, fill_value=0)
+
+        return percentages
+
+    def calculate_average_size_percentages(self, df):
+        # Define the FPS bins and corresponding labels
+        bins = [0, 500, 800, 900, 1000, 1200, 1300, float('inf')]
+        labels = ['0-500 Bytes', '500-800 Bytes', '800-900 Bytes', '900-1000 Bytes', '1000-1200 Bytes', '1200-1300 bytes', 'Above 1300 Bytes']
+
+        # Cut the 'fps' column into the defined bins
+        df['average_size_range'] = pd.cut(df['l_mean'], bins=bins, labels=labels, right=False)
+
+        # Calculate the percentage of data points in each bin
+        percentages = df['average_size_range'].value_counts(normalize=True) * 100
+
+        # Reindex to ensure all labels are present
+        percentages = percentages.reindex(labels, fill_value=0)
+
+        return percentages
+
+    def plot_feature_against_metric(self, df, feature_label, metric_label):
+        if feature_label not in df.columns:
+            raise ValueError(f"Feature label '{feature_label}' not found in DataFrame columns.")
+        if metric_label not in df.columns:
+            raise ValueError(f"Metric label '{metric_label}' not found in DataFrame columns.")
+
+        if metric_label == 'l_mean':
+            metric_name = 'Mean packet Size'
+        elif metric_label == 'l_num_pkts':
+            metric_name = 'Packet count'
+        else:
+            metric_name = metric_label
+
+        plt.figure(figsize=(10, 6))
+        plt.scatter(df[feature_label]/1000, df[metric_label], alpha=0.5)
+        plt.grid(True)
+        plt.tick_params(axis='both', which='major', labelsize=30)  # Making axis numbers larger
+        plt.xlabel('Bandwidth (KBps)', fontsize=34, labelpad=20)
+        plt.ylabel(metric_name, fontsize=30, labelpad=20)
+        plt.tight_layout()  # Adjust layout to fit labels properly
+        plt.show()
+
+    def save_intermediate(self, data_object, pickle_filename, dir_path):
+        pickle_filename = pickle_filename
+        pickle_filepath = f'{dir_path}/{pickle_filename}.pkl'
+
+        # Create the directory if it doesn't exist
+        os.makedirs(os.path.dirname(pickle_filepath), exist_ok=True)
+
+        # Save the intermediate data object to a pickle file
+        with open(pickle_filepath, 'wb') as fd1:
+            pickle.dump(data_object, fd1)
+
+    def load_intermediate(self, pickle_filename, dir_path):
+        with open(f'{dir_path}/{pickle_filename}.pkl', 'rb') as fd:
+            data_object = pickle.load(fd)
+        return data_object
+
 if __name__ == '__main__':
+
+    df_dir = "C:\\final_project\git_repo\data_collection_intermediates\dataAnalysisDFs"
 
     best_threshold = 274  # Accuracy of the best threshold: 0.9998766692302314
     metrics = ['brisque', 'fps', 'piqe']
     estimation_method = 'ip-udp-ml'
     feature_subset = ['LSTATS', 'TSTATS']
-    data_dirs = ["C:\\final_project\git_repo\data_collection\\falls",
-                 "C:\\final_project\git_repo\data_collection\\bandwidth",
+    data_dirs = [
+    #             "C:\\final_project\git_repo\data_collection\\falls",
+    #             "C:\\final_project\git_repo\data_collection\\bandwidth",
                  "C:\\final_project\git_repo\data_collection\\loss-0",
                  "C:\\final_project\git_repo\data_collection\\loss-1",
                  "C:\\final_project\git_repo\data_collection\\loss-2",
@@ -608,23 +793,47 @@ if __name__ == '__main__':
 
     # union traffic features and QoE metrics data frame
 
-    union_df = data_analyzer.union_df(file_tuples_list)
-    data_analyzer.histogram_density_plot(union_df, 'piqe')
-    data_analyzer.histogram_density_plot(union_df, 'quality-piqe')
-    data_analyzer.histogram_density_plot(union_df, 'fps')
-    data_analyzer.histogram_density_plot(union_df, 'brisque')
-    data_analyzer.histogram_density_plot(union_df, 'quality-brisque')
-    data_analyzer.histogram_density_plot(union_df, 'l_num_bytes')
-    data_analyzer.histogram_density_plot(union_df, 'l_num_pkts')
-    data_analyzer.histogram_density_plot(union_df, 'l_mean')
+    #union_df = data_analyzer.union_df(file_tuples_list)
+    #data_analyzer.save_intermediate(union_df, 'ip udp features and labels - loss', df_dir)
 
+    union_df = data_analyzer.load_intermediate('ip udp features and labels - loss', df_dir)
+
+    #data_analyzer.histogram_density_plot(union_df, 'piqe')
+    #data_analyzer.histogram_density_plot(union_df, 'quality-piqe')
+    #data_analyzer.histogram_density_plot(union_df, 'fps')
+    #data_analyzer.histogram_density_plot(union_df, 'brisque')
+    #data_analyzer.histogram_density_plot(union_df, 'quality-brisque')
+    #data_analyzer.histogram_density_plot(union_df, 'l_num_bytes')
+    #data_analyzer.histogram_density_plot(union_df, 'l_num_pkts')
+    #data_analyzer.histogram_density_plot(union_df, 'l_mean')
+
+    #data_analyzer.plot_feature_against_metric(union_df, 'l_num_bytes', 'l_mean')
+    #data_analyzer.plot_feature_against_metric(union_df, 'l_num_bytes', 'l_num_pkts')
+
+#    data_analyzer.plot_feature_against_metric(union_df, 'l_num_bytes', 'brisque')
+#    data_analyzer.plot_feature_against_metric(union_df, 'l_num_bytes', 'piqe')
+#    data_analyzer.plot_feature_against_metric(union_df, 'l_num_bytes', 'fps')
+
+    data_analyzer.cdf_plot(union_df, 'piqe')
+    data_analyzer.cdf_plot(union_df, 'quality-piqe')
+    data_analyzer.cdf_plot(union_df, 'fps')
+    data_analyzer.cdf_plot(union_df, 'brisque')
+    data_analyzer.cdf_plot(union_df, 'quality-brisque')
+    data_analyzer.cdf_plot(union_df, 'l_num_bytes')
+    data_analyzer.cdf_plot(union_df, 'l_num_pkts')
+    data_analyzer.cdf_plot(union_df, 'l_mean')
+
+    print(data_analyzer.calculate_fps_percentages(union_df))
+    print(data_analyzer.calculate_bandwidth_percentages(union_df))
+    print(data_analyzer.calculate_average_size_percentages(union_df))
 
     # correlation matrix
 
     #correlation_matrix = union_df.corr().abs()
-    #plt.figure(figsize=(10, 8))
+    #plt.figure(figsize=(14, 11))
     #sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5)
     #plt.title('Correlation Matrix')
+    #plt.tight_layout()
     #plt.show()
 
     # union traffic features and QoE metrics data frame RTP
@@ -651,10 +860,15 @@ if __name__ == '__main__':
     # union packets RTP data frame
 
     #union_packets_df_rtp = data_analyzer.union_packets_df_rtp(file_tuples_list)
+    #data_analyzer.save_intermediate(union_packets_df_rtp, 'rtp all packets', df_dir)
+
+    #union_packets_df_rtp = data_analyzer.load_intermediate('rtp all packets', df_dir)
+
     #data_analyzer.find_length_treshold(union_packets_df_rtp, [97, 103], 120)
     #data_analyzer.generate_confusion_matrix_table(union_packets_df_rtp, [97, 103], 120, best_threshold)
 
     #union_packets_df_rtp.to_csv('C:\\final_project\\notes and docs\\union_packets_rtp.csv', index=False)
-    #data_analyzer.rtp_classifier(union_packets_df_rtp)
+    #data_analyzer.rtp_classifier_cdf(union_packets_df_rtp)
+
 
     print("\n(:\n")

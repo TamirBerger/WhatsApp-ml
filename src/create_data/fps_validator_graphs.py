@@ -17,9 +17,9 @@ def load_and_clean_data(file_pattern):
         df = df.iloc[1:-1]  # Discarding the first and last samples
         if 'screenshots_num' in df.columns:  # Discarding samples with less than 45 screenshots
             initial_count = len(df)
-            df = df[df['screenshots_num'] >= 50]
+            df = df[df['screenshots_num'] >= 35]
             removed_count = initial_count - len(df)
-            print(f'File {i}: Removed {removed_count} samples with screenshots_num < 45')
+            print(f'File {i}: Removed {removed_count} samples with screenshots_num < 35')
         print("")
 
         # Extract FPS label from file name
@@ -61,8 +61,10 @@ def create_frame_rate_errors_plot(df_list):
     fig, ax = plt.subplots(figsize=(10, 6))
 
     # Set the y-axis limits closer to the whiskers
-    ax.set_ylim(lower_whisker - 3 * (upper_whisker - lower_whisker),
-                upper_whisker + 3 * (upper_whisker - lower_whisker))
+    # ax.set_ylim(lower_whisker - 2 * (upper_whisker - lower_whisker),
+    #            upper_whisker + 2 * (upper_whisker - lower_whisker))
+    ax.set_ylim(lower_whisker - 2,
+                upper_whisker + 2)
     box = ax.boxplot(fps_errors, labels=fps_labels, showmeans=True, whis=[10, 90], flierprops=dict(marker=''))
 
     # Annotate the plot with MAE values
@@ -114,35 +116,40 @@ def create_frame_rate_errors_plot_by_range(df_list):
     fig, ax = plt.subplots(figsize=(10, 6))
 
     # Set the y-axis limits closer to the whiskers
-    ax.set_ylim(lower_whisker - 3 * (upper_whisker - lower_whisker),
-                upper_whisker + 3 * (upper_whisker - lower_whisker))
+    #ax.set_ylim(lower_whisker - 2 * (upper_whisker - lower_whisker),
+    #            upper_whisker + 2 * (upper_whisker - lower_whisker))
+    ax.set_ylim(lower_whisker - 2,
+                upper_whisker + 2)
 
     # Plot the boxplot without outliers
-    box = ax.boxplot(non_empty_errors, labels=non_empty_labels, showmeans=True, whis=[10, 90], flierprops=dict(marker=''))
+    box = ax.boxplot(non_empty_errors, labels=non_empty_labels, showmeans=True, whis=[10, 90], flierprops=dict(marker=''),
+                     patch_artist=True,  # Fill the box with color
+                     boxprops=dict(color='black', linewidth=3),
+                     medianprops=dict(color='orange', linewidth=3),
+                     whiskerprops=dict(color='black', linewidth=2),
+                     capprops=dict(color='black', linewidth=2))
+
+    # Fill the boxes with color
+    colors = ['lightblue'] * len(non_empty_labels)
+    for patch, color in zip(box['boxes'], colors):
+        patch.set_facecolor(color)
 
     # Annotate the plot with MAE values
     for i, line in enumerate(box['medians']):
         x, y = line.get_xydata()[1]
-        ax.text(x, y, f'{mae_values[i]:.1f}', horizontalalignment='center', verticalalignment='bottom')
+        ax.text(x, y, f'{mae_values[i]:.1f}', horizontalalignment='center', verticalalignment='bottom', fontsize=20)
 
-    ax.set_xlabel('FPS Range')
-    ax.set_ylabel('FPS Error')
-    ax.set_title('Frame Rate Errors by FPS Range with 10th and 90th Percentile Whiskers and MAE Annotations')
+    ax.tick_params(axis='both', which='major', labelsize=20)  # Making axis numbers larger
+    ax.set_xlabel('FPS Range', fontsize=28, labelpad=20)
+    ax.set_ylabel('FPS Error', fontsize=28, labelpad=20)
+    #ax.set_title('Frame Rate Errors by FPS Range with 10th and 90th Percentile Whiskers and MAE Annotations')
+
+    # Add horizontal grid to the plot
+    ax.yaxis.grid(True)
+    ax.xaxis.grid(False)
+
+    plt.tight_layout()
     plt.show()
-
-
-# Load and clean data
-file_pattern = "C:\\final_project\\fps validator measurements new\\fpsLabels_*.csv"
-df_list = load_and_clean_data(file_pattern)
-
-# Compute MAE
-mae_values = compute_mae(df_list)
-
-# Create frame rate errors plot
-create_frame_rate_errors_plot(df_list)
-
-# Create frame rate errors plot by FPS range
-create_frame_rate_errors_plot_by_range(df_list)
 
 
 # Create histogram of FPS errors
@@ -195,8 +202,46 @@ def create_heatmap(df_list):
     plt.show()
 
 
+def compute_overall_metrics(df_list, tolerance=0.05):
+    all_errors = []
+    correct_predictions = 0
+    total_predictions = 0
+
+    for df in df_list:
+        fps_label = df['fps_label'].iloc[0]
+        fps_error = df['fps'].sub(fps_label).abs()
+        all_errors.extend(fps_error.tolist())
+
+        within_tolerance = fps_error <= (tolerance * fps_label)
+        correct_predictions += within_tolerance.sum()
+        total_predictions += len(df)
+
+    overall_mae = np.mean(all_errors)
+    accuracy = correct_predictions / total_predictions
+
+    return overall_mae, accuracy
+
+
+# Load and clean data
+file_pattern = "C:\\final_project\\fps validator measurements new\\fpsLabels_*.csv"
+df_list = load_and_clean_data(file_pattern)
+
+# Compute MAE
+mae_values = compute_mae(df_list)
+
+# Compute overall MAE and acc
+mae, accuracy = compute_overall_metrics(df_list)
+print("Overall MAE:", mae)
+print("Accuracy:", accuracy)
+
+# Create frame rate errors plot
+create_frame_rate_errors_plot(df_list)
+
+# Create frame rate errors plot by FPS range
+create_frame_rate_errors_plot_by_range(df_list)
+
 # Create histogram of FPS errors
-create_histogram(df_list)
+#create_histogram(df_list)
 
 # Create density plot
 #create_density_plot(df_list)

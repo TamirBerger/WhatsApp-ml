@@ -11,8 +11,8 @@ class FPScalculator:
     def __init__(self, duration=10):
         self.unique_frames_per_second = []
         # Define the region where the number is displayed (replace these coordinates with your own)
-        #self.x, self.y, self.width, self.height = 920, 65, 80, 65  # fps validation coordinates
-        self.x, self.y, self.width, self.height = 1315, 485, 105, 80
+        self.x, self.y, self.width, self.height = 985, 535, 10, 10  # fps validation coordinates
+        #self.x, self.y, self.width, self.height = 1315, 485, 105, 80
         self.start_time = None  # update at beginning of 'run' method
         self.grabs = []
         #self.fps_list = np.zeros(duration+1).tolist()

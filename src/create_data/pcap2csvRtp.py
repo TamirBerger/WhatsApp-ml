@@ -26,7 +26,7 @@ def convert(x):
 if __name__ == "__main__":
     #pcap_dir_path = "C:\\final_project\git_repo\data_collection\\falls\\2024_05_05_16_47_250bwFalls50KBps"
     #convert(pcap_dir_path)
-    father_dir = "C:\\final_project\git_repo\data_collection\\falls"
+    father_dir = "C:\\final_project\pcap_files"
 
     for f in os.listdir(father_dir):
         convert(father_dir+f'\{f}')
