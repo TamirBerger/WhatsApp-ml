@@ -1,7 +1,7 @@
 IMVCA QoE
 ==============================
 
-An application-agnostic framework developed to predict Quality of Experience (QoE) metrics from encrypted traffic for UDP-based instant messaging video call applications (IMVCAs).
+An application-agnostic framework to predict Quality of Experience (QoE) metrics from encrypted traffic for UDP-based instant messaging video call applications (IMVCAs).
 
 # 1. Dataset
 
