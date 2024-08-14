@@ -8,9 +8,10 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from sklearn.metrics import mean_absolute_error, accuracy_score, r2_score
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.model_selection import KFold, StratifiedKFold, RandomizedSearchCV
+from sklearn.utils.multiclass import type_of_target
 from xgboost import XGBClassifier, XGBRegressor
 from catboost import CatBoostRegressor, CatBoostClassifier
-from sklearn.model_selection import StratifiedKFold, RandomizedSearchCV
 import gc
 
 import os
@@ -24,13 +25,8 @@ print(project_root)
 print(sys.path)
 from util.config import project_config
 import pickle
-# from util.file_processor import FileProcessor
-# from util.file_processor import FileValidator
-# from util.data_splitter import KfoldCVOverFiles
 from models.ip_udp_ml import IP_UDP_ML
-from models.rtp_ml_ours import RTP_ML
-
-from models.ip_udp_heuristic import IP_UDP_Heuristic
+from models.rtp_ml import RTP_ML
 from util.helper_functions import create_file_tuples_list, KfoldCVOverFiles, create_file_tuples_list_rtp
 
 
@@ -154,10 +150,6 @@ class ModelRunner:
                 my_ip_l=self.my_ip_l
             )
             model.train(split_files)
-
-        elif self.estimation_method == 'ip-udp-heuristic':
-            model = IP_UDP_Heuristic(
-                vca=vca, metric=self.metric, config=project_config, dataset=bname)
 
         vca_model = model
         #self.save_intermediate(vca_model, 'vca_model')
@@ -330,12 +322,43 @@ class ModelRunner:
     def hyperparameter_tuning(self, metric):
         # Hyperparameter tuning for random forest model
 
+        file_tuples_list = []
+        for cond_dir in os.listdir(self.data_dir):
+            cond_dir_path = os.path.join(self.data_dir, cond_dir)
+            # for dir in data_dir:
+            file_tuples_list += create_file_tuples_list(cond_dir_path, metric)
+
+        bname = os.path.basename(self.data_dir)
+
+        if self.estimation_method == 'ip-udp-ml':
+
+            model = IP_UDP_ML(
+                feature_subset=self.feature_subset,
+                estimator=self.estimator,
+                config=project_config,
+                metric=self.metric,
+                dataset=bname,
+                my_ip_l=self.my_ip_l
+            )
+        else:  # self.estimation_method == 'rtp-ml':
+
+            model = RTP_ML(
+                feature_subset=self.feature_subset,
+                estimator=self.estimator,
+                config=project_config,
+                metric=self.metric,
+                dataset=bname,
+                my_ip_l=self.my_ip_l
+            )
+
+        train_features, train_labels = model.train(file_tuples_list)
+
         # Number of trees in random forest
-        n_estimators = [int(x) for x in np.linspace(start=200, stop=1000, num=5)]
+        n_estimators = [int(x) for x in np.linspace(start=10, stop=100, num=5)]
         # Number of features to consider at every split
         max_features = ['sqrt', 'log2', None]
         # Maximum number of levels in tree
-        max_depth = [int(x) for x in np.linspace(10, 100, num=10)]
+        max_depth = [int(x) for x in np.linspace(10, 100, num=5)]
         max_depth.append(None)
         # Minimum number of samples required to split a node
         min_samples_split = [2, 5, 10]
@@ -353,45 +376,17 @@ class ModelRunner:
         print(random_grid)
 
         # Use the random grid to search for best hyperparameters
-        skf = StratifiedKFold(n_splits=3)
-        # First create the base model to tune
-        #rf = RandomForestRegressor()
+        # Choose cross-validation strategy based on target type
+        if type_of_target(train_labels) in ['binary', 'multiclass']:
+            skf = StratifiedKFold(n_splits=3)
+        else:  # target_type is 'continuous' for regression
+            skf = KFold(n_splits=3)
+
         # Random search of parameters, using 3 fold cross validation,
         # search across 100 different combinations, and use all available cores
-        rf_random = RandomizedSearchCV(estimator=self.estimator, param_distributions=random_grid, n_iter=20, cv=skf, verbose=2,
+        rf_random = RandomizedSearchCV(estimator=self.estimator, param_distributions=random_grid, n_iter=2, cv=skf, verbose=2,
                                        random_state=42, n_jobs=-1)
 
-        file_tuples_list = []
-        #data_dirs = ["C:\\final_project\git_repo\data_collection\\falls"]
-        for data_dir in self.data_dir:
-            for dir in data_dir:
-                file_tuples_list += create_file_tuples_list(dir, metric)
-
-        bname = os.path.basename(self.data_dir)
-
-        if self.estimation_method == 'ip-udp-ml':
-
-            model = IP_UDP_ML(
-                feature_subset=self.feature_subset,
-                estimator=self.estimator,
-                config=project_config,
-                metric=self.metric,
-                dataset=bname,
-                my_ip_l=self.my_ip_l
-            )
-            train_features, train_labels = model.train(file_tuples_list)
-
-        else:  # self.estimation_method == 'rtp-ml':
-
-            model = RTP_ML(
-                feature_subset=self.feature_subset,
-                estimator=self.estimator,
-                config=project_config,
-                metric=self.metric,
-                dataset=bname,
-                my_ip_l=self.my_ip_l
-            )
-            train_features, train_labels = model.train(file_tuples_list)
         # Fit the random search model
         rf_random.fit(train_features, train_labels)
         print(rf_random.best_params_)
@@ -401,7 +396,7 @@ class ModelRunner:
         #joblib.dump(best_random, f"best_random_forest_{metric}.pkl")
 
         # Clear memory
-        del train_features, train_labels, rf_random
+        del train_features, train_labels, rf_random, file_tuples_list
         gc.collect()
 
         return best_random
@@ -432,46 +427,29 @@ def plot_acc_by_margin_err(data, name):
 if __name__ == '__main__':
 
     my_ip_l = ['10.100.102.32', '192.168.0.102', '10.0.0.115', '192.168.0.100', '192.168.0.103', '192.168.0.104']
-    metrics = ['fps', 'brisque', 'piqe', 'quality-piqe', 'quality-brisque']  # labels
-    estimation_methods = ['ip-udp-ml']  # model selection: ['ip-udp-heuristic', 'ip-udp-ml']
+    metrics = ['fps', 'brisque', 'piqe', 'quality-piqe', 'quality-brisque']
+    estimation_methods = ['ip-udp-ml']  # model selection: ['ip-udp-ml', rtp-ml]
 
     # groups of features as per `features.feature_extraction.py`
     feature_subsets = [['LSTATS', 'TSTATS']]
     # network conditions set
-    #net_conditions = ["loss", "falls", "bandwidth"]
-    net_conditions = ["loss-0", "loss-1", "loss-2", "loss-5", "loss-10", "falls", "bandwidth"]
-
-    # train/test network conditions subset
-    #net_conditions_train = [["falls"]]
-    #net_conditions_test = [["falls"]]
-
+    net_conditions = ["loss", "falls", "bandwidth"]
 
     net_conditions_train_test = [
-                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["bandwidth"]),
-                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["falls"]),
-                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-0"]),
-                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-1"]),
-                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-2"]),
-                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-5"]),
-                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"], ["loss-10"]),
-
-                                (["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"],
-                                 ["bandwidth", "falls", "loss-0", "loss-1", "loss-2", "loss-5", "loss-10"])
+                                (["bandwidth", "falls", "loss"], ["bandwidth"]),
+                                (["bandwidth", "falls", "loss"], ["falls"]),
+                                (["bandwidth", "falls", "loss"], ["loss"])
                                 ]
 
     data_dir = ["C:\\final_project\git_repo\data_collection"]
 
-    low_margin_err, high_margin_err = 0, 7
+    low_margin_err, high_margin_err = 0, 5
 
     bname = os.path.basename(data_dir[0])
 
     # Create a directory for saving model intermediates
     intermediates_dir = f'{data_dir[0]}_intermediates'
     Path(intermediates_dir).mkdir(exist_ok=True, parents=True)
-
-    # Get a list of pairs (trace_csv_file, ground_truth)
-    #fp = FileProcessor(data_directory=data_dir[0])
-    #file_dict = fp.get_linked_files()
 
     # Create 5-fold cross validation splits and validate files. Refer `util/validator.py` for more details
 
@@ -484,17 +462,13 @@ if __name__ == '__main__':
 
     #vca_preds = defaultdict(list)
 
-    #param_list = [metrics, estimation_methods, feature_subsets, net_conditions_train, net_conditions_test, data_dir]
     param_list = [metrics, estimation_methods, feature_subsets, net_conditions_train_test, data_dir]
     # Run models over 5 cross validations
     n = 1
-    #for metric, estimation_method, feature_subset, net_conds_subset_train, net_conds_subset_test, data_dir in product(*param_list):
     for metric, estimation_method, feature_subset, net_conditions_train_test, data_dir in product(*param_list):
 
         net_conds_subset_train = net_conditions_train_test[0]
         net_conds_subset_test = net_conditions_train_test[1]
-        if (metric == 'brisque' or metric == 'quality-brisque' or metric == 'quality-piqe' or metric == 'piqe') and 'heuristic' in estimation_method:
-            continue
         line = f'\n===================================================\n' \
                f'Train net condition: {" ".join(net_conds_subset_train)}\n' \
                f'Test net condition: {" ".join(net_conds_subset_test)}\n' \
@@ -506,10 +480,11 @@ if __name__ == '__main__':
             fd.write(line)
         print(line)
 
-        #model_runner = ModelRunner(
-        #    metric, estimation_method, feature_subset, data_dir, 1, my_ip_l, net_conds_subset_train,
-        #    net_conds_subset_test)
-        #best_estimator = model_runner.hyperparameter_tuning(metric)
+        # hyperparameter tuning:
+        model_runner = ModelRunner(
+            metric, estimation_method, feature_subset, data_dir, 1, my_ip_l, net_conds_subset_train,
+            net_conds_subset_test)
+        best_model = model_runner.hyperparameter_tuning(metric)
 
         vca_preds = []
         #metric_net_cond_preds = []
@@ -541,8 +516,8 @@ if __name__ == '__main__':
             model_runner = ModelRunner(
                 metric, estimation_method, feature_subset, data_dir, cv_idx, my_ip_l, net_conds_subset_train, net_conds_subset_test)
 
-            # hyperparameter tuning
-            #model_runner.estimator = best_estimator
+            # select hyperparameter tuning results estimator:
+            model_runner.estimator = best_model
 
             vca_model = model_runner.train_model(train_file_tuple_list)
             vca_model.display_top5_features(" ".join(net_conds_subset_train) + " - " + " ".join(net_conds_subset_test))
@@ -597,6 +572,5 @@ if __name__ == '__main__':
 
         # calculate results from total predictions
         combine_preds = pd.concat(vca_preds, axis=0)
-        combine_preds.to_csv(f'combine_preds{metric}_{"-".join(net_conds_subset_train)}_{"-".join(net_conds_subset_test)}.csv', index=False)
+        combine_preds.to_csv(f'combine_preds-{metric}_{"-".join(net_conds_subset_train)}_{"-".join(net_conds_subset_test)}.csv', index=False)
         #model_runner.get_avg_cv_predictions(combine_preds)
-

@@ -2,7 +2,7 @@ import subprocess
 import time
 import sys
 import os
-from images2brisque_labels_csv import calculate_avg_brisque, write_to_csv, write_et_to_csv
+from images2brisque import calculate_avg_brisque, write_to_csv, write_et_to_csv
 
 
 def capture_screen(output_folder, num_frames, framerate):
@@ -30,7 +30,7 @@ if __name__ == "__main__":
         print("screen capture ffmpeg: screen_capture_ffmpeg.py didn't get all arguments")
 
     initial_time = sys.argv[1]
-    BW = sys.argv[2]
+    name = sys.argv[2]
     dir_path = sys.argv[3]
     timeout = int(sys.argv[4])  # Duration of capture in seconds
 
@@ -52,7 +52,11 @@ if __name__ == "__main__":
     # ----- Create brisque labels csv file -----
     time.sleep(5)
     output_csv = dir_path + '\\brisqueLabels.csv'
+    et_list = [int(start_time) + i for i in range(1, timeout + 1)]
+
+    # calculate brisque average scores per time slot and create csv labels file:
     #average_scores = calculate_avg_brisque(capture_folder)
-    et_list = [int(start_time) + i for i in range(1, timeout+1)]
     #write_to_csv(average_scores, et_list, output_csv)
+
+    # alternatively, create csv contains only the time stamps, remaining to calculate brisque average scores later.
     write_et_to_csv(et_list, output_csv)

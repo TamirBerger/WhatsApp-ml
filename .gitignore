@@ -5,3 +5,4 @@ __pycache__/
 data_collection/
 src/venv/
 src/.idea/
+src/data_analysis/

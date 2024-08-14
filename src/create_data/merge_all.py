@@ -11,18 +11,17 @@ def run_file(args):
 
 
 if __name__ == '__main__':
-    #time.sleep(0)  # 5 seconds to open full screen video window
     initial_time = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M")
-    BW = "valid"
-    directory = f"C:\\final_project\pcap_files\\{initial_time}_{BW}KBps"
-    duration = "240"
+    name = "validation"
+    directory = f"C:\\final_project\pcap_files\\{initial_time}_{name}"
+    duration = "5"
     if not os.path.exists(directory):
         os.makedirs(directory)
 
     files = [
-        ('create_pcap.py', initial_time, BW, directory, duration),
-        ('receiver_fps_ver4.py', initial_time, BW, directory, duration),
-        ('screen_capture_ffmpeg.py', initial_time, BW, directory, duration)
+        ('create_pcap.py', initial_time, name, directory, duration),
+        ('receiver_fps.py', initial_time, name, directory, duration),
+        ('screen_capture_ffmpeg.py', initial_time, name, directory, duration)
     ]
 
     # Create a pool of processes

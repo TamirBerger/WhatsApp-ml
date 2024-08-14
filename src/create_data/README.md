@@ -1,0 +1,1 @@
+To train and evaluate models using your own PCAP files, convert them into CSV format using the script 'src/create_data/pcap2csvRtp.py'. Note that tshark must be installed and configured on your system.

@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 
-def convert(x):
+def convertRtp(x):
     #tshark_path = "C:\\Program Files\\Wireshark\\"
     for t in os.listdir(x):
         if t.endswith('.pcap'):
@@ -16,17 +16,9 @@ def convert(x):
             os.system(tshark_cmd)
             print(f"{t[:-5]}.csv was created successfully")
 
-            # Add packet number column
-            #print(f'Adding packet number column to: {output_csv}')
-            #df = pd.read_csv(output_csv)
-            #df.insert(0, 'packet_number', range(0, len(df)))
-            #df.to_csv(output_csv, index=False)
-            #print(f"Packet number column added to {output_csv}")
 
 if __name__ == "__main__":
-    #pcap_dir_path = "C:\\final_project\git_repo\data_collection\\falls\\2024_05_05_16_47_250bwFalls50KBps"
-    #convert(pcap_dir_path)
     father_dir = "C:\\final_project\pcap_files"
 
     for f in os.listdir(father_dir):
-        convert(father_dir+f'\{f}')
+        convertRtp(father_dir+f'\{f}')

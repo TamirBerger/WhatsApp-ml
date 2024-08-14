@@ -14,7 +14,6 @@ from os.path import dirname, abspath
 d = dirname(dirname(abspath(__file__)))
 sys.path.append(d)
 from util.feature_extraction import FeatureExtractor
-from ip_udp_heuristic import IP_UDP_Heuristic
 import matplotlib.pyplot as plt
 
 
@@ -71,11 +70,6 @@ class IP_UDP_ML:
             df_net = df_net.sort_values(by=['time_normed'])
             df_net = df_net[['length', 'time', 'time_normed']]
             df_netml = feature_extractor.extract_features(df_net=df_net)
-
-            # heuristic features
-            #heuristic_model = IP_UDP_Heuristic(self.metric, self.config)
-            #df_heuristic = heuristic_model.estimate(file_tuple)
-            #df_netml = pd.merge(df_netml, df_heuristic, on='et')
 
             df_labels = pd.read_csv(labels_file)
             if df_labels is None or len(df_net) == 0:
@@ -176,11 +170,6 @@ class IP_UDP_ML:
         df_net = df_net.sort_values(by=['time_normed'])
         df_net = df_net[['length', 'time', 'time_normed']]
         df_netml = feature_extractor.extract_features(df_net=df_net)
-
-        # heuristic features
-        #heuristic_model = IP_UDP_Heuristic(self.metric, self.config)
-        #df_heuristic = heuristic_model.estimate(file_tuple)
-        #df_netml = pd.merge(df_netml, df_heuristic, on='et')
 
         # Shift the rows to get the features of the previous second
         #prev_second_features = df_netml.drop(columns=['et']).shift(1)

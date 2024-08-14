@@ -55,6 +55,10 @@ class KfoldCVOverFiles:
 
 def create_file_tuples_list(main_folder, metric):
     tuples_list = []
+    if metric == 'quality-brisque':
+        metric = 'brisque'
+    elif metric == 'piqe' or metric == 'quality-piqe':
+        metric = 'brisque_piqe'
 
     # Iterate over all folders in the main folder
     for folder_name in os.listdir(main_folder):
@@ -77,6 +81,10 @@ def create_file_tuples_list(main_folder, metric):
 
 def create_file_tuples_list_rtp(main_folder, metric):
     tuples_list = []
+    if metric == 'quality-brisque':
+        metric = 'brisque'
+    elif metric == 'piqe' or metric == 'quality-piqe':
+        metric = 'brisque_piqe'
 
     # Iterate over all folders in the main folder
     for folder_name in os.listdir(main_folder):
@@ -106,7 +114,7 @@ def filter_ptype(x):
         return str(int(float(x.split(',')[0])))
     return str(int(float(x)))
 
-
+'''
 def mark_video_frames(pcap):
     pcap["is_video_pred"] = (
         pcap["udp.length"] > project_config['video_thresh']).astype(np.int32)
@@ -116,7 +124,9 @@ def mark_video_frames(pcap):
 def filter_video_frames(pcap):
     pcap = pcap[pcap["udp.length"] > project_config['video_thresh']]
     return pcap
+'''
 
+'''
 def filter_video_frames_rtp(pcap, vca):
     # if vca == 'webex':
     #     top_num = 1
@@ -127,8 +137,9 @@ def filter_video_frames_rtp(pcap, vca):
     top_x = pcap.groupby(['rtp.p_type'])['udp.length'].mean().nlargest(top_num).index.tolist()
     condition = ((pcap['rtp.p_type'].isin(top_x)))
     return pcap[condition]
+'''
 
-
+'''
 def read_net_file(dataset, filename):
     csv_columns = ['frame.time_relative', 'frame.time_epoch', 'ip.src', 'ip.dst', 'ip.proto', 'ip.len', 'udp.srcport', 'udp.dstport', 'udp.length', 'rtp.ssrc', 'rtp.timestamp', 'rtp.seq', 'rtp.p_type', 'rtp.marker']
     df_net = pd.read_csv(filename)
@@ -147,22 +158,9 @@ def read_net_file(dataset, filename):
     if df_net.empty:
         return
     return df_net
+'''
 
-
-
-def is_freeze(x):
-    if x["frame_dur"] > max(3*x["avg_frame_dur"], (x["avg_frame_dur"] + 0.150)):
-        return 1
-    else:
-        return 0
-
-
-def get_freeze_dur(x):
-    if x["is_freeze"] == 1:
-        return x["frame_dur"]
-    else:
-        return 0
-
+'''
 def get_net_stats(df_video, ft_end_col="frame_et"):
     ## frame duration calculations
     df_video = df_video.sort_values(by=ft_end_col)
@@ -195,3 +193,4 @@ def get_net_stats(df_video, ft_end_col="frame_et"):
     df_grp['predicted_bitrate'] = df_grp['predicted_bitrate']*8
     df_grp['predicted_frame_jitter'] = df_grp['predicted_frame_jitter']*1000
     return df_grp
+'''
